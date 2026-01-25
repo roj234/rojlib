@@ -7,7 +7,6 @@ import roj.asm.type.Type;
 import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
@@ -50,8 +49,8 @@ final class MapLiteral extends Expr {
 		type = new ParameterizedType("java/util/Map", 0, ParameterizedType.NO_WILDCARD);
 
 		if (key == null) {
-			type.addChild(WildcardType.anyType);
-			type.addChild(WildcardType.anyType);
+			type.addChild(Types.anyType);
+			type.addChild(Types.anyType);
 		} else {
 			var wrapper = Type.getWrapper(key);
 			type.addChild(wrapper == null ? key : wrapper);
@@ -70,7 +69,7 @@ final class MapLiteral extends Expr {
 			if (!expr.isConstant()) isDynamic = true;
 
 			if (commonType == null) commonType = expr.type();
-			else commonType = ctx.getCommonParent(commonType, expr.type());
+			else commonType = ctx.compiler.getCommonAncestor(commonType, expr.type());
 		}
 		return commonType;
 	}

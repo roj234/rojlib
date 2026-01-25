@@ -97,15 +97,16 @@ public final class TypeHelper {
 	 *
 	 * @return void <init>(java.lang.String, double)
 	 */
-	public static String humanize(List<Type> types, String methodName, boolean trimPackage) {
+	public static String humanize(List<? extends IType> types, String methodName, boolean trimPackage) {
 		return humanize(types, methodName, trimPackage, IOUtil.getSharedCharBuf()).toString();
 	}
-	public static CharList humanize(List<Type> types, String methodName, boolean trimPackage, CharList sb) {
+	public static CharList humanize(List<? extends IType> types, String methodName, boolean trimPackage, CharList sb) {
 		int pos = sb.length();
-		Type t = types.remove(types.size() - 1);
+		int parCount = types.size();
+		IType t = types.get(--parCount);
+		String o;
 
-		if (t.owner != null) {
-			String o = t.owner;
+		if ((o = t.owner()) != null) {
 			sb.append(o, trimPackage ? o.lastIndexOf('/') + 1 : 0, o.length());
 			for (int j = t.array() - 1; j >= 0; j--) sb.append("[]");
 		} else {
@@ -113,23 +114,20 @@ public final class TypeHelper {
 		}
 		sb.append(' ').append(methodName).append("(");
 
-		if (!types.isEmpty()) {
+		if (parCount > 0) {
 			int i = 0;
 			do {
 				t = types.get(i++);
-				if (t.owner != null) {
-					String o = t.owner;
+				if ((o = t.owner()) != null) {
 					sb.append(o, trimPackage ? o.lastIndexOf('/') + 1 : 0, o.length());
 					for (int j = t.array() - 1; j >= 0; j--) sb.append("[]");
 				} else {
 					t.toString(sb);
 				}
-				if (i == types.size()) break;
+				if (i == parCount) break;
 				sb.append(", ");
 			} while (true);
 		}
-
-		types.add(t);
 
 		return sb.replace('/', '.', pos, sb.length()).append(')');
 	}

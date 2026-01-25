@@ -27,7 +27,7 @@ final class FieldListSingle extends ComponentList {
 				checkDeprecation(ctx, owner, node);
 				return new FieldResult(owner, node);
 			}
-			return new FieldResult(ctx.getCapturedError().replace('/', '.').toString());
+			return new FieldResult(ctx.getCapturedError());
 		} finally {
 			ctx.disableErrorCapture();
 		}

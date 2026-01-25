@@ -2,11 +2,12 @@ package roj.asm.type;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmCache;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
-import roj.collect.LinkedHashMap;
+import roj.collect.LinkedOpenHashKVSet;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -15,7 +16,6 @@ import roj.util.DynByteBuf;
 import roj.util.OperationDone;
 
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
@@ -42,10 +42,10 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public class Signature extends Attribute {
+public class Signature extends Attribute implements TypeVariableContext {
 	public static final int METHOD = 1, FIELD = 0, CLASS = -1;
 	@MagicConstant(intValues = {METHOD, FIELD, CLASS}) public byte type;
-	@NotNull public Map<String, List<IType>> typeVariables;
+	@NotNull public LinkedOpenHashKVSet<String, TypeVariableDeclaration> typeVariables;
 	@NotNull public List<IType> values, exceptions;
 
 	public static IType unboundedWildcard() { return Any.any; }
@@ -53,17 +53,15 @@ public class Signature extends Attribute {
 
 	public Signature(@MagicConstant(intValues = {METHOD, FIELD, CLASS}) int type) {
 		this.type = (byte) type;
-		this.typeVariables = Collections.emptyMap();
+		this.typeVariables = LinkedOpenHashKVSet.emptySet();
 		this.values = Collections.emptyList();
 		this.exceptions = Collections.emptyList();
 	}
 
 	public void validate() {
-		for (Map.Entry<String, List<IType>> entry : typeVariables.entrySet()) {
-			List<IType> list = entry.getValue();
-
-			for (int i = 0; i < list.size(); i++) {
-				list.get(i).validate(IType.E_TYPE_VARIABLE, i);
+		for (var decl : typeVariables) {
+			for (int i = 0; i < decl.size(); i++) {
+				decl.get(i).validate(IType.E_TYPE_VARIABLE, i);
 			}
 		}
 
@@ -92,9 +90,9 @@ public class Signature extends Attribute {
 	@NotNull
 	public List<IType> getBounds() {
 		List<IType> bounds = new ArrayList<>(typeVariables.size());
-		for (List<IType> value : typeVariables.values()) {
-			IType type = value.get(0);
-			if (type.kind() == IType.OBJECT_BOUND) type = value.get(1);
+		for (var decl : typeVariables) {
+			IType type = decl.get(0);
+			if (type.kind() == IType.OBJECT_BOUND) type = decl.get(1);
 
 			bounds.add(type);
 		}
@@ -110,14 +108,13 @@ public class Signature extends Attribute {
 
 		if (!typeVariables.isEmpty()) {
 			sb.append('<');
-			for (Map.Entry<String, List<IType>> entry : typeVariables.entrySet()) {
-				sb.append(entry.getKey());
-				List<IType> list = entry.getValue();
+			for (var decl : typeVariables) {
+				sb.append(decl.name);
 
-				list.get(0).toDesc(sb.append(':'));
+				decl.get(0).toDesc(sb.append(':'));
 
-				for (int i = 1; i < list.size(); i++) {
-					list.get(i).toDesc(sb.append(':'));
+				for (int i = 1; i < decl.size(); i++) {
+					decl.get(i).toDesc(sb.append(':'));
 				}
 			}
 			sb.append('>');
@@ -192,10 +189,22 @@ public class Signature extends Attribute {
 		if (typeVariables.isEmpty()) return sb;
 
 		sb.append('<');
-		Iterator<Map.Entry<String, List<IType>>> itr = typeVariables.entrySet().iterator();
+		var itr = typeVariables.iterator();
 		while (true) {
-			Map.Entry<String, List<IType>> entry = itr.next();
-			appendTypeVariable(sb, entry.getKey(), entry.getValue());
+			var decl = itr.next();
+
+			sb.append(decl.name);
+			if (!decl.isEmpty()) {
+				if (decl.size() > 1 || !"java/lang/Object".equals(decl.get(0).owner())) {
+					sb.append(" extends ");
+					int i = "java/lang/Object".equals(decl.get(0).owner()) ? 1 : 0;
+					while (true) {
+						decl.get(i).toString(sb);
+						if (++i == decl.size()) break;
+						sb.append(" & ");
+					}
+				}
+			}
 
 			if (!itr.hasNext()) break;
 			sb.append(", ");
@@ -203,24 +212,9 @@ public class Signature extends Attribute {
 
 		return sb.append('>');
 	}
-	private void appendTypeVariable(CharList sb, String name, List<IType> list) {
-		sb.append(name);
-		if (list == null) list = typeVariables.getOrDefault(name, Collections.emptyList());
-		if (list.isEmpty()) return;
-		if (list.size() > 1 || !"java/lang/Object".equals(list.get(0).owner())) {
-			sb.append(" extends ");
-			int i = "java/lang/Object".equals(list.get(0).owner()) ? 1 : 0;
-			while (true) {
-				IType value = list.get(i++);
-				value.toString(sb);
-				if (i == list.size()) break;
-				sb.append(" & ");
-			}
-		}
-	}
 
 	public void rename(UnaryOperator<String> fn) {
-		for (List<IType> values : typeVariables.values()) {
+		for (var values : typeVariables) {
 			for (int i = values.size() - 1; i >= 0; i--) {
 				values.get(i).rename(fn);
 			}
@@ -232,7 +226,8 @@ public class Signature extends Attribute {
 	}
 
 	public static Signature parse(CharSequence s) {return parse(s, 99);}
-	public static Signature parse(CharSequence s, @MagicConstant(intValues = {CLASS, FIELD, METHOD, 99/*ANY*/}) int expect) {
+	public static Signature parse(CharSequence s, @MagicConstant(intValues = {CLASS, FIELD, METHOD, 99/*ANY*/}) int expect) {return parse(s, expect, null);}
+	public static Signature parse(CharSequence s, @MagicConstant(intValues = {CLASS, FIELD, METHOD, 99/*ANY*/}) int expect, Signature parent) {
 		IntValue i1 = new IntValue();
 		CharList tmp = IOUtil.getSharedCharBuf();
 
@@ -242,8 +237,15 @@ public class Signature extends Attribute {
 
 		// type parameter
 		if (s.charAt(0) == '<') {
-			sign.typeVariables = new LinkedHashMap<>();
+			var declaredTypeVariables = new ArrayList<TypeVariableDeclaration>();
+			var usedTypeVariables = new TVDSet();
 			sign.type = CLASS;
+
+			TypeVariableContext ctx = name -> {
+				var decl = usedTypeVariables.get(name);
+				if (decl == null) usedTypeVariables.add(decl = TypeVariableDeclaration.newUnresolved(name));
+				return decl;
+			};
 
 			if (expect == FIELD) fail("未预料的<类型参数>(预期类型是<字段>)", 0, s);
 			i = 1;
@@ -259,12 +261,21 @@ public class Signature extends Attribute {
 
 				// +1: skip ':'
 				i = j + 1;
-				ArrayList<IType> vals = new ArrayList<>(2);
+
+				var decl = usedTypeVariables.get(name);
+				if (decl == null) {
+					usedTypeVariables.add(decl = new TypeVariableDeclaration(name));
+				} else {
+					assert decl.getState() == 1;
+					decl.clearUnresolved();
+					decl.clear();
+				}
+				declaredTypeVariables.add(decl);
 
 				// first parameter: 'extends'
 				// 'nullable': use '::' mark EmptyClass
 				i1.value = i;
-				vals.add(parseValue(s, i1, F_PLACEHOLDER, tmp));
+				decl.add(parseValue(s, i1, F_PLACEHOLDER, tmp, ctx));
 				i = i1.value;
 
 				// other parameters: 'implements'
@@ -272,21 +283,36 @@ public class Signature extends Attribute {
 					if (i >= s.length()) fail("未结束的'和'类型", i, s);
 
 					i1.value = i+1;
-					vals.add(parseValue(s, i1, 0, tmp));
+					decl.add(parseValue(s, i1, 0, tmp, ctx));
 					i = i1.value;
 				}
 
-				if (vals.size() == 1 && vals.get(0) == Itf.itf) fail("此处不允许占位符类型",i,s);
+				if (decl.size() == 1 && decl.get(0) == Itf.itf) fail("此处不允许占位符类型",i,s);
 
-				sign.typeVariables.put(name, vals);
+				if (s.charAt(i) == '>') { i++; break; }
+			}
 
-				if (s.charAt(i) == '>') {
-					i++;
-					break;
+			if (parent != null) {
+				for (var tvd : declaredTypeVariables) usedTypeVariables.remove(tvd);
+				for (var tvd : usedTypeVariables) {
+					TypeVariableDeclaration decl = parent.typeVariables.get(tvd.name);
+					if (decl != null) {
+						for (IType user : tvd) ((TypeVariable) user).decl = decl;
+						tvd.clear();
+					} else {
+						throw new IllegalArgumentException("找不到类型参数 "+tvd.name);
+					}
 				}
 			}
+
+			// 这样的话就不需要清除hashMap了
+			if (!declaredTypeVariables.equals(usedTypeVariables.getItems())) {
+				usedTypeVariables.setItems(declaredTypeVariables);
+			}
+			sign.typeVariables = usedTypeVariables;
 		}
 
+		var ctx = parent == null ? sign : sign.withParent(parent);
 		List<IType> v = AsmCache.getInstance().methodTypeTmp();
 		boolean isMethod = s.charAt(i) == '(';
 		if (isMethod) {
@@ -296,12 +322,12 @@ public class Signature extends Attribute {
 
 			// in
 			while (s.charAt(i1.value) != ')') {
-				v.add(parseValue(s, i1, F_PRIMITIVE, tmp));
+				v.add(parseValue(s, i1, F_PRIMITIVE, tmp, ctx));
 			}
 			i1.value++;
 
 			// out
-			v.add(parseValue(s, i1, F_PRIMITIVE, tmp));
+			v.add(parseValue(s, i1, F_PRIMITIVE, tmp, ctx));
 
 			sign.values = new ArrayList<>(v);
 
@@ -312,7 +338,7 @@ public class Signature extends Attribute {
 
 				v.clear();
 				while (i1.value < s.length()) {
-					v.add(parseValue(s, i1, 0, tmp));
+					v.add(parseValue(s, i1, 0, tmp, ctx));
 					i1.value++;
 				}
 
@@ -321,7 +347,7 @@ public class Signature extends Attribute {
 		} else {
 			i1.value = i;
 			// extends or field type
-			v.add(parseValue(s, i1, 0, tmp));
+			v.add(parseValue(s, i1, 0, tmp, ctx));
 
 			// implements
 			i = i1.value;
@@ -330,7 +356,7 @@ public class Signature extends Attribute {
 				sign.type = CLASS;
 
 				while (i1.value < s.length()) {
-					v.add(parseValue(s, i1, 0, tmp));
+					v.add(parseValue(s, i1, 0, tmp, ctx));
 				}
 			}
 
@@ -341,37 +367,45 @@ public class Signature extends Attribute {
 			sign.type = (byte) expect;
 		}
 
-		// 当前上下文不足以检测缺失的类型参数.
 		return sign;
 	}
 
-	public static IType parseGeneric(CharSequence s) {return parseValue(s, new IntValue(), F_PRIMITIVE, IOUtil.getSharedCharBuf());}
+	public static IType parseGeneric(CharSequence s) {return parseGeneric(s, TypeVariableContext.EMPTY);}
+	public static IType parseGeneric(CharSequence s, TypeVariableContext ctx) {return parseValue(s, new IntValue(), F_PRIMITIVE, IOUtil.getSharedCharBuf(), ctx);}
 
 	private static final int F_PLACEHOLDER = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000;
 	@SuppressWarnings("MagicConstant")
-	private static IType parseValue(CharSequence s, IntValue mi, int flag, CharList tmp) {
+	private static IType parseValue(CharSequence s, IntValue pOffset, int flag, CharList tmp, TypeVariableContext ctx) {
 		tmp.clear();
-		int i = mi.value;
+		int i = pOffset.value;
 
 		int array = i;
 		while (s.charAt(i) == '[') i++;
 		array = i-array;
 
 		char c = s.charAt(i);
-		mi.value = i+1;
+		pOffset.value = i+1;
 		switch (c) {
 			case ':':
 				if ((flag & F_PLACEHOLDER) == 0) fail("此处不允许占位符类型("+flag+")",i,s);
-				mi.value--;
+				pOffset.value--;
 				return Itf.itf;
 
 			case 'L':
-				return parseType(s,mi,tmp,array|(flag&0xF00));
+				return parseType(s,pOffset,tmp,array|(flag&0xF00), ctx);
 
 			case 'T':
-				c = parseTypeParam(s,mi,tmp);
-				if (c != ';') fail("未结束的类型"+c, mi.value-1,s);
-				return new TypeVariable(tmp.toString(), array, (flag >>> 8) & 0xF);
+				c = parseTypeParam(s,pOffset,tmp);
+				if (c != ';') fail("未结束的类型"+c, pOffset.value-1,s);
+				String name = tmp.toString();
+
+				TypeVariableDeclaration decl = ctx.resolveTypeVariable(name);
+				if (decl == null) {
+					decl = new TypeVariableDeclaration(name, 0);
+					decl.state = 2;
+				}
+
+				return new TypeVariable(decl, array, (flag >>> 8) & 0xF);
 
 			default:
 				if ((flag & F_PRIMITIVE) == 0) fail("此处不允许基本类型("+flag+")",i,s);
@@ -384,9 +418,9 @@ public class Signature extends Attribute {
 		}
 	}
 	@SuppressWarnings("MagicConstant")
-	private static IType parseType(CharSequence s, IntValue mi, CharList tmp, int flag) {
-		char c = parseTypeParam(s, mi, tmp);
-		int pos = mi.value;
+	private static IType parseType(CharSequence s, IntValue pOffset, CharList tmp, int flag, TypeVariableContext ctx) {
+		char c = parseTypeParam(s, pOffset, tmp);
+		int pos = pOffset.value;
 
 		IGeneric g;
 		if ((flag & F_SUBCLASS) != 0) {
@@ -422,20 +456,20 @@ public class Signature extends Attribute {
 							}
 							default -> ex = 0;
 						}
-						mi.value = pos;
-						g.addChild(parseValue(s, mi, F_PRIMITIVE | ex, tmp));
-						pos = mi.value;
+						pOffset.value = pos;
+						g.addChild(parseValue(s, pOffset, F_PRIMITIVE | ex, tmp, ctx));
+						pos = pOffset.value;
 						break;
 				}
 			}
 			c = s.charAt(pos);
-			mi.value = pos+1;
+			pOffset.value = pos+1;
 		}
 
 		if (c == '.') {
 			if (g == null) g = new ParameterizedType(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
 
-			g.sub = (GenericSub) parseType(s, mi, tmp, F_SUBCLASS);
+			g.sub = (GenericSub) parseType(s, pOffset, tmp, F_SUBCLASS, ctx);
 		} else if (c != ';') fail("未预料的 '"+c+"' 期待';'或'.'",pos,s);
 
 		if (g != null) return g;
@@ -460,6 +494,12 @@ public class Signature extends Attribute {
 		}
 	}
 	private static void fail(String error, int position, CharSequence signature) {throw new IllegalArgumentException(Tokenizer.escape(signature)+" 在第"+position+"个字符("+(position>=signature.length()?"EOF":signature.charAt(position))+")解析失败: "+error);}
+
+	@Override
+	public @Nullable TypeVariableDeclaration resolveTypeVariable(String name) {return typeVariables.get(name);}
+
+	@Deprecated(forRemoval = true)
+	public @NotNull Map<String, TypeVariableDeclaration> getTypeVariables() {return Collections.emptyMap();}
 
 	private static final class Itf implements IType {
 		static final Itf itf = new Itf();
@@ -492,5 +532,13 @@ public class Signature extends Attribute {
 		}
 		@Override public IType clone() {return any;}
 		@Override public String toString() { return "?"; }
+	}
+
+	public static final class TVDSet extends LinkedOpenHashKVSet<String, TypeVariableDeclaration> {
+		public TVDSet() {this(2);}
+		public TVDSet(int initialCapacity) {super(initialCapacity, new ArrayList<>(initialCapacity));}
+		public TVDSet(LinkedOpenHashKVSet<String, TypeVariableDeclaration> typeVariables) {super(typeVariables);}
+
+		@Override protected String getKey(TypeVariableDeclaration value) {return value.name;}
 	}
 }

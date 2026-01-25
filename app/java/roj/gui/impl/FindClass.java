@@ -131,20 +131,20 @@ public class FindClass extends JFrame {
 		}
 		if (uiserAnnotation.isSelected()) {
 			for (ClassNode data : ref) {
-				Annotations aa = data.getAttribute(data.cp, Attribute.VisibleAnnotations);
+				Annotations aa = data.getAttribute(Attribute.VisibleAnnotations);
 				checkAnnotation(filter, aa, out, data, data);
-				Annotations bb = data.getAttribute(data.cp, Attribute.InvisibleAnnotations);
+				Annotations bb = data.getAttribute(Attribute.InvisibleAnnotations);
 				checkAnnotation(filter, bb, out, data, data);
 				for (MethodNode method : data.methods) {
-					aa = method.getAttribute(data.cp, Attribute.VisibleAnnotations);
+					aa = method.getAttribute(data, Attribute.VisibleAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.getAttribute(data.cp, Attribute.InvisibleAnnotations);
+					bb = method.getAttribute(data, Attribute.InvisibleAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 				for (FieldNode method : data.fields) {
-					aa = method.getAttribute(data.cp, Attribute.VisibleAnnotations);
+					aa = method.getAttribute(data, Attribute.VisibleAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.getAttribute(data.cp, Attribute.InvisibleAnnotations);
+					bb = method.getAttribute(data, Attribute.InvisibleAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 			}

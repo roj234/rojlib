@@ -7,7 +7,6 @@ import roj.asm.AsmCache;
 import roj.asm.attr.BootstrapMethods;
 import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.IntSet;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -110,7 +109,6 @@ public final class ConstantPool {
 			switch (r.getByte(r.rIndex)) {
 				case UTF, CLASS -> {
 					var c = readConstant(r, csts, i, false);
-					if (c == null) c = (Constant) csts[i];
 					if (listener != null) listener.accept(c);
 					csts[i++] = c;
 					c.index = (char) i;
@@ -344,7 +342,7 @@ public final class ConstantPool {
 			rm = false;
 		}
 
-		int prev = utf._length();
+		int prev = utf.byteLength();
 		int curr = ByteList.countJavaUTF(str);
 
 		length += curr - prev;
@@ -354,7 +352,7 @@ public final class ConstantPool {
 		if (rm) refMap.add(utf);
 	}
 	static void verifyUtfLength(String str) {
-		if (str.length() >= 0x10000/3) {
+		if (str.length() > 0x10000/3) {
 			if (str.length() >= 0x10000 || ByteList.countJavaUTF(str) >= 0x10000)
 				throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
 		}
@@ -490,8 +488,6 @@ public final class ConstantPool {
 	}
 	//endregion
 
-	public int indexOf(Constant c) {return c.index;}
-
 	public int internIndex(Constant c) {return intern(c).index;}
 	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T intern(T c) {
@@ -608,9 +604,6 @@ public final class ConstantPool {
 	 * 新的开放寻址哈希表实现，它比我对内存占用优化过的HashSet还少20%的内存，而且性能更好（我没测和大小分布的关系，可能大常量池表现差也说不定），这大概是因为缓存局部性
 	 */
 	private final class RefMap {
-		// 通过这个Set，table可以使用char[]范围，而不需要占用一个特殊值表示tombstone了
-		private final IntSet tombstone = new IntSet();
-
 		private char[] table;
 		private int mask;
 		private boolean empty = true;
@@ -619,56 +612,33 @@ public final class ConstantPool {
 
 		public boolean isEmpty() {return empty;}
 
-		public Constant find(Constant key) {
-			int h = hash(key.hashCode());
-			int i = h & mask;
-			while (table[i] != 0) {
-				if (!tombstone.contains(i)) {
-					Constant c = constants.get(table[i] - 1);
-					if (key.equals(c)) return c;
-				}
-				i = (i + 1) & mask;
-			}
-			return key;
-		}
-
+		public Constant find(Constant key) {return findOrAdd(key, false);}
 		public void add(Constant key) {intern(key);}
+		public Constant intern(Constant key) {return findOrAdd(key, true);}
 
-		public Constant intern(Constant key) {
-			int h = hash(key.hashCode());
-			int i = h & mask;
-			int firstRemoved = -1;
-
-			while (table[i] != 0) {
-				if (!tombstone.contains(i)) {
-					Constant c = constants.get(table[i] - 1);
-					if (key.equals(c)) return c;
-				} else {
-					if (firstRemoved == -1) firstRemoved = i;
-				}
+		private Constant findOrAdd(Constant key, boolean add) {
+			int i = hash(key.hashCode()) & mask;
+			char idx;
+			while ((idx = table[i]) != 0) {
+				Constant c = constants.get(idx - 1);
+				if (key.equals(c)) return c;
 				i = (i + 1) & mask;
 			}
 
-			if (firstRemoved != -1) {
-				i = firstRemoved;
-				tombstone.remove(firstRemoved);
+			if (add) {
+				table[i] = key.index;
+				empty = false;
 			}
-
-			table[i] = key.index;
-			empty = false;
 
 			return key;
 		}
 
 		public boolean remove(Constant key) {
-			int h = hash(key.hashCode());
-			int i = h & mask;
-			while (table[i] != 0) {
-				if (!tombstone.contains(i) && constants.get(table[i] - 1) == key) {
-					// 如果本身是最后一个
-					if (table[(i + 1) & mask] == 0)
-						table[i] = 0;
-					else tombstone.add(i);
+			int i = hash(key.hashCode()) & mask;
+			char idx;
+			while ((idx = table[i]) != 0) {
+				if (constants.get(idx - 1) == key) {
+					backshiftKey(i);
 					return true;
 				}
 				i = (i + 1) & mask;
@@ -676,41 +646,61 @@ public final class ConstantPool {
 			return false;
 		}
 
+		private void backshiftKey(int cur) {
+			var tab = table;
+
+			while(true) {
+				int prev = cur;
+				cur = cur + 1 & mask;
+
+				int idx;
+				while(true) {
+					if ((idx = tab[cur]) == 0) {
+						tab[prev] = 0;
+						return;
+					}
+
+					int curSlot = hash(constants.get(idx - 1).hashCode()) & mask;
+					if (cur <= prev) {
+						if (cur < curSlot && curSlot <= prev) break;
+					} else {
+						if (cur < curSlot || curSlot <= prev) break;
+					}
+					cur = cur + 1 & mask;
+				}
+
+				tab[prev] = (char) idx;
+			}
+		}
+
 		public void clear() {
 			if (empty) return;
 			empty = true;
 			Arrays.fill(table, (char) 0);
-			tombstone.clear();
 		}
 
 		public void ensureCapacity(int size) {
 			// 0.75 Load Factor
 			int newCap = MathUtils.nextPowerOfTwo((size * 4) / 3);
 			if (newCap > 131072) newCap = 131072;
-			if (table == null || table.length < newCap) rehash(newCap);
-		}
-		private void rehash(int newCap) {
+			if (table != null && table.length >= newCap) return;
+
 			table = new char[newCap];
 			mask = newCap - 1;
-			tombstone.clear();
+			empty = constants.isEmpty();
 
-			for (int index = 0; index < constants.size(); index++) {
-				var c = constants.get(index);
+			for (int index = 0; index < constants.size(); ) {
+				var c = constants.get(index++);
 				if (c == CstTop.TOP) continue;
 
-				int h = hash(c.hashCode());
-				int i = h & mask;
-
+				int i = hash(c.hashCode()) & mask;
 				while (table[i] != 0) {
 					i = (i + 1) & mask;
 				}
-				table[i] = c.index;
+				table[i] = (char) index;
 			}
-			empty = constants.isEmpty();
 		}
 
-		private static int hash(int h) {
-			return h ^ (h >>> 16);
-		}
+		private static int hash(int h) {return h ^ (h >>> 16);}
 	}
 }

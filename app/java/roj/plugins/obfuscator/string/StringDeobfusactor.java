@@ -52,11 +52,11 @@ public class StringDeobfusactor {
 			cls.name("roj/reflect/gen" + Math.abs(System.nanoTime() % 9999999));
 			cls.addInterface("roj/mapper/Obfuscator$Decoder");
 
-			MethodNode method = mn.copy().parsed(data.cp);
+			MethodNode method = mn.copy().parsed(data);
 			method.name("_decode_");
 			cls.methods.add(method);
 
-			InsnList ins = method.getAttribute(data.cp, Attribute.Code).instructions;
+			InsnList ins = method.getAttribute(data, Attribute.Code).instructions;
 			for (InsnNode node : ins) {
 				if (node.opcode() == Opcodes.INVOKEVIRTUAL) {
 					MemberDescriptor desc = node.desc();

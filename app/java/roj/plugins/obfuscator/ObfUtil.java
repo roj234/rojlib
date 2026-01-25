@@ -25,10 +25,10 @@ public class ObfUtil {
 	static {
 		try {
 			ClassNode total = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/plugins/obfuscator/ObfUtil.class"));
-			MethodNode txa = total.getMethodObj("TextXORA").parsed(total.cp);
+			MethodNode txa = total.getMethodObj("TextXORA").parsed(total);
 			//txa.code.attributes.clear();
 			textXOR_A = txa;
-			MethodNode txb = total.getMethodObj("TextXORB_dec").parsed(total.cp);
+			MethodNode txb = total.getMethodObj("TextXORB_dec").parsed(total);
 			//txb.code.attributes.clear();
 			textXOR_B = txb;
 		} catch (IOException e) {
@@ -80,7 +80,7 @@ public class ObfUtil {
 			List<MethodNode> methods = cd.methods;
 			for (int j = 0; j < methods.size(); j++) {
 				if (rnd.nextInt() < chance.getOrDefault(cd.name(), defaultChance)) {
-					MethodNode m = methods.get(j).parsed(cd.cp);
+					MethodNode m = methods.get(j).parsed(cd);
 				}
 			}
 		}
@@ -284,7 +284,7 @@ public class ObfUtil {
 			List<MethodNode> methods = cd.methods;
 			for (int j = 0; j < methods.size(); j++) {
 				if (rnd.nextInt() < chance.getOrDefault(cd.name(), defaultChance)) {
-					MethodNode node = methods.get(j).parsed(cd.cp);
+					MethodNode node = methods.get(j).parsed(cd);
 					//intp.init(m);
 					//List<CodeBlock> codeBlocks = intp.gather(m.code);
 					//if(m.code.frames != null)

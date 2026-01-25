@@ -77,7 +77,7 @@ final class ClassStage implements Processor {
 
 			var fn = new FieldNode(Opcodes.ACC_PUBLIC | (getterImpl.modifier()&Opcodes.ACC_STATIC) | (writeId < 0 ? Opcodes.ACC_FINAL : 0), name, getterImpl.returnType());
 
-			var sign = getterImpl.getAttribute(file.cp(), Attribute.SIGNATURE);
+			var sign = getterImpl.getAttribute((ClassNode)file, Attribute.SIGNATURE);
 			if (sign != null) {
 				var returnType = sign.values.get(sign.values.size()-1);
 				if (returnType.kind() != 0) {

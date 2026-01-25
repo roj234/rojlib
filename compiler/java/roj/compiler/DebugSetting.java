@@ -5,5 +5,5 @@ package roj.compiler;
  * @since 2025/08/08 11:08
  */
 public interface DebugSetting {
-	boolean ShowFullDiagnostic = false;
+	boolean ShowFullDiagnostic = true;
 }

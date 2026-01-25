@@ -3,18 +3,18 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.type.IType;
-import roj.asm.type.ParameterizedType;
-import roj.asm.type.Signature;
-import roj.asm.type.Type;
+import roj.asm.type.*;
 import roj.collect.ArrayList;
 import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
-import roj.compiler.asm.LPSignature;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
+import roj.compiler.types.CompoundType;
+import roj.compiler.types.SignatureBuilder;
+import roj.compiler.types.VirtualType;
 import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.OperationDone;
@@ -35,6 +35,7 @@ final class NewAnonymousClass extends Expr {
 	private final CompileUnit klass;
 	// 匿名类的上下文
 	private NestContext nestContext;
+	private IType parentType;
 
 	NewAnonymousClass(Invoke cur, CompileUnit klass) {
 		this.newExpr = cur;
@@ -70,10 +71,12 @@ final class NewAnonymousClass extends Expr {
 			return NaE.resolveFailed(this);
 		}
 
-		if (parentType.kind() != 0) {
-			var sign = new LPSignature(Signature.CLASS);
-			if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) sign._impl(parentType);
-			else sign._add(parentType);
+		if (parentType.kind() != IType.SIMPLE_TYPE) {
+			var sign = new SignatureBuilder(Signature.CLASS);
+			if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) sign.set(1, parentType);
+			else sign.set(0, parentType);
+			sign.applyTypeParam(klass);
+
 			klass.classSignature = sign;
 			klass.addAttribute(sign);
 		}
@@ -118,7 +121,8 @@ final class NewAnonymousClass extends Expr {
 		newExpr.expr = Type.klass(klass.name());
 		nestContext = NestContext.anonymous(ctx, klass, constructor, args);
 
-		return parentType instanceof ParameterizedType g && g.typeParameters.size() == 1 && g.typeParameters.get(0) == WildcardType.anyGeneric
+		this.parentType = parentType;
+		return parentType instanceof ParameterizedType g && g.typeParameters.size() == 1 && g.typeParameters.get(0) == Types.anyGeneric
 				? this /* new XXX<>() {}的泛型参数到赋值时才能确定 */
 				: resolveNow(ctx);
 	}
@@ -144,12 +148,63 @@ final class NewAnonymousClass extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {throw OperationDone.NEVER;}
 	@Override
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		if (!(cast.getType1() instanceof ParameterizedType g)) {
-			cw.ctx.report(this, Kind.ERROR, "lambda.untyped");
+		if (!(cast.getTarget() instanceof ParameterizedType target)) {
+			cw.ctx.report(this, Kind.ERROR, "type.cannotInfer", IText.translatable("type.anonymousClass"));
 			return;
 		}
 
-		((ParameterizedType) newExpr.expr).typeParameters = g.typeParameters;
+		var sourceType = (ParameterizedType) this.parentType;
+		int typeVariableCount = cw.ctx.resolve(sourceType).getSignature().typeVariables.size();
+
+		List<IType> dummies = Arrays.asList(new IType[typeVariableCount]);
+		for (int i = 0; i < dummies.size(); i++) dummies.set(i, VirtualType.anyType("dummy"));
+		sourceType.typeParameters = dummies;
+
+		List<IType> inferred = cw.ctx.compiler.inferGeneric(sourceType, target.owner());
+		for (int i = 0; i < inferred.size(); i++) {
+			substituteVirtualTypes(inferred.get(i), target.typeParameters.get(i), dummies);
+		}
+
+		for (IType type : dummies) {
+			if (type instanceof VirtualType) {
+				cw.ctx.report(Kind.ERROR, "newAnonymousClass.unsubstitutedType", dummies);
+				return;
+			}
+		}
+
 		resolveNow(cw.ctx).write(cw, cast);
+	}
+
+	private static void substituteVirtualTypes(IType inferred, IType provided, List<IType> type2) {
+		if (inferred.kind() == IType.CAPTURED_WILDCARD) {
+			inferred = ((CompoundType) inferred).getBound();
+		}
+		if (provided.kind() == IType.CAPTURED_WILDCARD) {
+			provided = ((CompoundType) provided).getBound();
+		}
+		if (provided.kind() == IType.TYPE_VARIABLE) {
+			provided = ((TypeVariable) provided).decl.get(0);
+		}
+
+		switch (inferred.kind()) {
+			case IType.ANY_TYPE -> {
+				int i = type2.indexOf(inferred);
+				type2.set(i, provided);
+			}
+			case IType.PARAMETERIZED_TYPE, IType.PARAMETERIZED_CHILD -> {
+				IGeneric t1 = (IGeneric) inferred;
+				IGeneric t2 = (IGeneric) provided;
+
+				List<IType> t1p = t1.typeParameters;
+				List<IType> t2p = t2.typeParameters;
+				for (int i = 0; i < t1p.size(); i++) {
+					substituteVirtualTypes(t1p.get(i), t2p.get(i), type2);
+				}
+
+				if (t1.sub != null) {
+					substituteVirtualTypes(t1.sub, t2.sub, type2);
+				}
+			}
+		}
 	}
 }

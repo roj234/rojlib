@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveUtils;
 import roj.collect.ArrayList;
 import roj.collect.FindSet;
-import roj.collect.LinkedOpenHashSet;
+import roj.collect.LinkedOpenHashKVSet;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
@@ -44,10 +44,10 @@ import static roj.archive.zip.ZipEntryWriter.*;
  */
 @FastVarHandle
 public final class ZipEditor extends ZipFile {
-	private final FindSet<ZipUpdate> pendingUpdates = new LinkedOpenHashSet<>();
+	private final FindSet<ZipUpdate> pendingUpdates = new LinkedOpenHashKVSet<>();
 
 	public ZipEditor(String name) throws IOException { this(new File(name)); }
-	public ZipEditor(File file) throws IOException { this(file, FLAG_RemoveEXT | FLAG_Verify); }
+	public ZipEditor(File file) throws IOException { this(file, FLAG_RemoveEXT | FLAG_Verify | FLAG_ReadCENOnly); }
 	public ZipEditor(File file, int flags) throws IOException { this(file, flags, StandardCharsets.UTF_8); }
 	public ZipEditor(File file, int flags, Charset charset) throws IOException {
 		this(ArchiveUtils.tryOpenSplitArchive(file, false), flags, charset);
@@ -376,7 +376,7 @@ public final class ZipEditor extends ZipFile {
 		buf.clear();
 		int flushLimit = buf.list.length - 256;
 		for (int i = 0; i < entries.size(); i++) {
-			writeCEN(buf, entries.get(i));
+			writeCEN(buf, entries.get(i), 0);
 			if (buf.wIndex() > flushLimit) {
 				buf.writeToStream(out);
 				buf.clear();

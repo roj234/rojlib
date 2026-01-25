@@ -15,9 +15,10 @@ import roj.compiler.CompileContext;
 import roj.compiler.LavaCompiler;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.FieldAccessHook;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.asm.WildcardType;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.FieldResult;
@@ -184,7 +185,7 @@ final class MemberAccess extends LeftValue {
 				// 2. 省略this的当前类字段（包括继承！）
 				// * => 在错误处理中需要二次检查以生成更有帮助的错误信息（static）
 
-				var fieldList = ctx.getFieldList(ctx.file, part);
+				var fieldList = ctx.compiler.getFieldList(ctx.file, part);
 				if (fieldList != ComponentList.NOT_FOUND) {
 					inaccessibleThis = fieldList.findField(ctx, ctx.inStatic ? ComponentList.IN_STATIC : 0);
 					if (inaccessibleThis.error == null) {
@@ -247,7 +248,7 @@ final class MemberAccess extends LeftValue {
 				checkNullishDecl(ctx);
 			}
 
-			String error = ctx.resolveFieldChain(symbol, fType, sb);
+			IText error = ctx.resolveFieldChain(symbol, fType, sb);
 			if (error != null) {
 				ctx.report(this, Kind.ERROR, error);
 				return NaE.resolveFailed(this);
@@ -257,7 +258,7 @@ final class MemberAccess extends LeftValue {
 		} else {
 			// 4. 前缀包名.字段 ^
 			// ^ => 我决定采用（已经设计好的）这种机制，虽然可能没必要
-			String error = ctx.resolveStaticClassOrField(sb, classExprTarget != null);
+			IText error = ctx.resolveStaticClassOrField(sb, classExprTarget != null);
 
 			if (nullishBits != 0) {
 				int offset = ctx.getFrClassPrefix()+1;
@@ -266,7 +267,7 @@ final class MemberAccess extends LeftValue {
 			}
 
 			if (error != null) {
-				if (error.isEmpty()) {
+				if (error == CompileContext.NO_ERROR) {
 					assert classExprTarget != null;
 					classExprTarget.accept(ctx.getFrStart());
 					return null;
@@ -274,7 +275,7 @@ final class MemberAccess extends LeftValue {
 
 				if (lastSegment != null && ctx.compiler.hasFeature(Compiler.OMISSION_NEW)) {
 					var checkConstructor = ctx.resolveStaticClassOrField(sb.append('/').append(lastSegment), true);
-					if ("".equals(checkConstructor)) {
+					if (checkConstructor == CompileContext.NO_ERROR) {
 						assert classExprTarget != null;
 						classExprTarget.accept(Type.klass(ctx.getFrStart().name()));
 						return null;
@@ -379,7 +380,7 @@ final class MemberAccess extends LeftValue {
 	public Object constVal() {return hasFeature(Feature.ENUM_REFERENCE) ? AnnVal.ofEnum(owner.name(), chain[0].name()) : super.constVal();}
 
 	@Override
-	public IType type() {return resultType == null ? WildcardType.anyType : resultType;}
+	public IType type() {return resultType == null ? Types.anyType : resultType;}
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {

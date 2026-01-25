@@ -10,11 +10,11 @@ import roj.collect.HashSet;
 import roj.compiler.CompileContext;
 import roj.compiler.LavaCompiler;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.SwitchNode;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.types.CompoundType;
 
 import java.util.List;
 
@@ -41,7 +41,7 @@ final class Switch extends Expr {
 			Expr expr = branch.value;
 			if (expr != null) {
 				if (type == null) type = expr.type();
-				else type = ctx.getCommonParent(type, expr.type());
+				else type = ctx.compiler.getCommonAncestor(type, expr.type());
 			}
 
 			if (branch.labels != null) coveredAll += branch.labels.size();
@@ -67,7 +67,7 @@ final class Switch extends Expr {
 					}
 				} else if (type.kind() == IType.UNION_TYPE) {
 					HashSet<IType> patternType = new HashSet<>();
-					patternType.addAll(((WildcardType) type).getTraits());
+					patternType.addAll(((CompoundType) type).getTraits());
 					for (var branch : node.branches) {
 						if (patternType.isEmpty()) LavaCompiler.debugLogger().warn("ExprSwitch FailFast");
 
@@ -110,7 +110,7 @@ final class Switch extends Expr {
 		// 如果当前类是目标，那么不再需要检测子类
 		if (patterns.remove(info.name())) return true;
 
-		var subclasses = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
+		var subclasses = info.getAttribute(Attribute.PermittedSubclasses);
 		if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && subclasses != null) {
 			List<String> value = subclasses.value;
 			for (int i = 0; i < value.size(); i++) {
@@ -136,7 +136,7 @@ final class Switch extends Expr {
 		var ctx = cw.ctx;
 
 		var type = this.type;
-		if (cast.getType1() != null) type = cast.getType1();
+		if (cast.getTarget() != null) type = cast.getTarget();
 
 		for (var branch : node.branches) {
 			Expr expr = branch.value;

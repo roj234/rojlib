@@ -5,7 +5,6 @@ import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.ConstantValue;
-import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
@@ -30,10 +29,10 @@ public final class FieldNode extends MemberNode {
 		this.desc = type;
 	}
 	public FieldNode copyDesc() { return new FieldNode(modifier, name, desc); }
-	public FieldNode copy(ConstantPool cp) {
+	public FieldNode copy(ClassNode owner) {
 		FieldNode inst = copyDesc();
 		if (attributes != null) {
-			parsed(cp);
+			parsed(owner);
 			inst.attributes = new AttributeList(attributes);
 		}
 		return inst;
@@ -45,18 +44,19 @@ public final class FieldNode extends MemberNode {
 		this.desc = TypeHelper.class2asm(f.getType());
 	}
 
-	public FieldNode parsed(ConstantPool cp) {
+	public FieldNode parsed(ClassNode owner) {
 		if (attributes != null) {
-			Attribute.parseAll(this, cp, attributes, Signature.FIELD);
+			Attribute.parseAll(this, owner, attributes, Signature.FIELD);
 		}
 		return this;
 	}
 
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes,Signature.FIELD); }
+	@Override
+	public <T extends Attribute> T getAttribute(ClassNode cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes,Signature.FIELD); }
 
 	@NotNull
-	public final Signature getSignature(ConstantPool cp) {
-		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+	public final Signature getSignature(ClassNode cn) {
+		Signature signature = getAttribute(cn, Attribute.SIGNATURE);
 		if (signature == null) {
 			signature = new Signature(Signature.METHOD);
 			signature.values = Arrays.asList(fieldType()); // allow change value...
@@ -78,18 +78,16 @@ public final class FieldNode extends MemberNode {
 
 	public String toString() { return toString(new CharList(), null, 4, false).toStringAndFree(); }
 	public CharList toString(CharList sb, ClassNode owner, int prefix, boolean writeSignature) {
-		ConstantPool cp = owner == null ? null : owner.cp;
-
 		Annotations a;
-		a = getAttribute(cp, Attribute.VisibleAnnotations);
+		a = getAttribute(owner, Attribute.VisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = getAttribute(cp, Attribute.InvisibleAnnotations);
+		a = getAttribute(owner, Attribute.InvisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
-		Signature sig = writeSignature ? getAttribute(cp, Attribute.SIGNATURE) : null;
+		Signature sig = writeSignature ? getAttribute(owner, Attribute.SIGNATURE) : null;
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());
 
-		ConstantValue cv = getAttribute(cp, Attribute.ConstantValue);
+		ConstantValue cv = getAttribute(owner, Attribute.ConstantValue);
 		if (cv != null) sb.append(" = ").append(cv.c.toString());
 
 		return sb.append(';');

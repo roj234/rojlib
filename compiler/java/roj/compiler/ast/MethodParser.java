@@ -23,10 +23,9 @@ import roj.compiler.api.AStatementParser;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.SwitchableType;
 import roj.compiler.api.Types;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
@@ -448,7 +447,7 @@ public final class MethodParser {
 				String name = entry.getKey();
 
 				Object node = Helpers.cast(extra.remove(name));
-				if (node instanceof Expr expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
+				if (node instanceof Expr expr) a.raw().put(name, AnnotationBuilder.evaluate(ctx, expr, entry.getValue()));
 				else if (node == null && !desc.elementDefault.containsKey(entry.getKey())) missed.add(name);
 			}
 
@@ -784,18 +783,18 @@ public final class MethodParser {
 				}
 
 				for (int i = 0; i < exTypes.size(); i++) {
-					if (ctx.instanceOf(entry.type, exTypes.get(i))) {
+					if (ctx.compiler.instanceOf(entry.type, exTypes.get(i))) {
 						ctx.report(Kind.ERROR, "block.try.captured", type, exTypes.get(i));
 						break;
 					}
 				}
 
 				if (!ctx.compiler.hasFeature(Compiler.OMIT_CHECKED_EXCEPTION)
-					&& !ctx.instanceOf(entry.type, "java/lang/RuntimeException")) {
+					&& !ctx.compiler.instanceOf(entry.type, "java/lang/RuntimeException")) {
 
 					boolean notFound = true;
 					for (int i = _checkedExceptions.size() - 1; i >= 0; i--) {
-						if (ctx.instanceOf(_checkedExceptions.get(i).owner(), entry.type)) {
+						if (ctx.compiler.instanceOf(_checkedExceptions.get(i).owner(), entry.type)) {
 							_checkedExceptions.remove(i);
 							notFound = false;
 						}
@@ -1261,7 +1260,7 @@ public final class MethodParser {
 	}
 	private void invokeClose(Variable v, boolean report) {
 		ClassNode info = ctx.compiler.resolve(v.type.owner());
-		var result = ctx.getMethodList(info, "close").findMethod(ctx, Collections.emptyList(), 0);
+		var result = ctx.compiler.getMethodList(info, "close").findMethod(ctx, Collections.emptyList(), 0);
 		assert result != null;
 
 		if (report) result.addExceptions(ctx, true);
@@ -1556,16 +1555,12 @@ public final class MethodParser {
 
 					int iterableMode = ctx.compiler.link(owner).getIterableMode(ctx.compiler);
 					if (iterableMode == 2) { // 2=LavaRandomAccessible
-						var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
-						if (result == null) {
-							ctx.report(Kind.INTERNAL_ERROR, "ListIterable.get resolve failed");
-							skipBlockOrStatement();
-							return;
-						}
+						var result = ctx.getMethodListOrReport(owner, "get", iter).findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
+						if (result.error != null) {skipBlockOrStatement();return;}
 
 						IType inferredType = result.returnType();
 
-						if (lastVar.type == WildcardType.anyType) {
+						if (lastVar.type == Types.anyType) {
 							lastVar.type = inferredType;
 						} else {
 							if (ctx.castTo(inferredType, lastVar.type, 0).type < 0) {
@@ -1583,7 +1578,7 @@ public final class MethodParser {
 						}
 
 						// var x : t 获取正确类型
-						if (lastVar.type == WildcardType.anyType) lastVar.type = ctx.inferGeneric(type, genericCastCheck).get(0);
+						if (lastVar.type == Types.anyType) lastVar.type = ctx.compiler.inferGeneric(type, genericCastCheck).get(0);
 					}
 
 					// iterable
@@ -1594,8 +1589,12 @@ public final class MethodParser {
 						var isInterface = (owner.modifier()&ACC_INTERFACE) != 0;
 
 						// -2=Iterator
-						if (iterableMode != -2)
-							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "iterator", "()Ljava/util/Iterator;", false);
+						String itrType = owner.name();
+						if (iterableMode != -2) {
+							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, itrType, "iterator", "()Ljava/util/Iterator;", false);
+							itrType = "java/util/Iterator";
+							isInterface = true;
+						}
 
 						cw.store(_itr);
 
@@ -1603,18 +1602,18 @@ public final class MethodParser {
 						execLast = null;
 
 						cw.load(_itr);
-						cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "hasNext", "()Z", false);
+						cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, itrType, "hasNext", "()Z", false);
 						cw.jump(IFEQ, breakTo);
 
 						cw.load(_itr);
 						Type elementType = lastVar.type.rawType();
 						if (!elementType.isPrimitive()) {
 							// 20250409 如果有重载，要不要调用更具体的重载并省略checkcast？
-							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "next", "()Ljava/lang/Object;", false);
+							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, itrType, "next", "()Ljava/lang/Object;", false);
 							cw.clazz(CHECKCAST, elementType);
 						} else {
 							// 20250708 nextLong etc, 这样和PrimitiveIterator兼容
-							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "next"+elementType.capitalized(), "()"+(char)elementType.type, false);
+							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, itrType, "next"+elementType.capitalized(), "()"+(char)elementType.type, false);
 						}
 						cw.store(lastVar);
 
@@ -1643,7 +1642,7 @@ public final class MethodParser {
 				// int __len = __var.length;
 				cw.load(_arr);
 				if (owner != null) {
-					var result = ctx.getMethodList(owner, "size").findMethod(ctx, type, Collections.emptyList(), 0);
+					var result = ctx.compiler.getMethodList(owner, "size").findMethod(ctx, type, Collections.emptyList(), 0);
 					if (result != null) MethodResult.writeInvoke(result.method, ctx, cw);
 				} else {
 					cw.insn(ARRAYLENGTH);
@@ -1664,7 +1663,7 @@ public final class MethodParser {
 				cw.load(_i);
 				if (owner != null) {
 					// 检查可能存在的override
-					var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
+					var result = ctx.compiler.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
 					if (result != null) {
 						MethodResult.writeInvoke(result.method, ctx, cw);
 						ctx.castTo(result.method.returnType(), lastVar.type, TypeCast.DOWNCAST).write(cw);
@@ -1847,7 +1846,7 @@ public final class MethodParser {
 				}
 
 				var ownerInfo = ctx.compiler.resolve(owner);
-				if (ctx.instanceOf(owner, "java/lang/Enum")) {
+				if (ctx.compiler.instanceOf(owner, "java/lang/Enum")) {
 					kind = disableOptimization ? 2 : 3;
 					DFI = ctx.getFieldDFI(ownerInfo, null, prevDFI);
 					break;
@@ -1924,7 +1923,7 @@ public final class MethodParser {
 							for (Object o : labelDeDup) {
 								if (o instanceof IType t1) {
 									// 没有反向检查，因为本来就是一个一个instanceof
-									if (ctx.getHierarchyList(ctx.resolve(t1)).containsKey(type.owner())) {
+									if (ctx.compiler.getHierarchyList(ctx.resolve(t1)).containsKey(type.owner())) {
 										ctx.report(Kind.ERROR, "block.switch.collisionType", t1, type);
 									}
 								}
@@ -2870,7 +2869,7 @@ public final class MethodParser {
 
 		ctx.dynamicFieldImport = ctx.getFieldDFI(info, ref, prevDFI);
 		ctx.dynamicMethodImport = name -> {
-			var cl = ctx.getMethodList(info, name);
+			var cl = ctx.compiler.getMethodList(info, name);
 			if (cl != ComponentList.NOT_FOUND) return CompileContext.Import.virtualCall(info, name, ref == null ? null : new LocalVariable(ref));
 
 			return prevDMI == null ? null : prevDMI.apply(name);
@@ -2950,7 +2949,7 @@ public final class MethodParser {
 		wr.retractWord();
 
 		if (type == Token.LITERAL) {
-			defineVariables(WildcardType.anyType, isFinal);
+			defineVariables(Types.anyType, isFinal);
 			return true;
 		}
 		return false;
@@ -3070,7 +3069,7 @@ public final class MethodParser {
 		}
 		type = ctx.resolveType(type);
 
-		boolean needInfer = type == WildcardType.anyType;
+		boolean needInfer = type == Types.anyType;
 		Token w;
 		do {
 			var name = wr.except(Token.LITERAL).text();
@@ -3083,7 +3082,7 @@ public final class MethodParser {
 				var.hasValue = true;
 				if (isFinal) var.isFinal = true;
 
-				var node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE).resolve(ctx);
+				var node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE|ExprParser._ENV_TYPED_ARRAY).resolve(ctx);
 
 				var nodeType = node.type();
 				if (nodeType.kind() <= 1 && RETURNSTACK_TYPE.equals(nodeType.owner()))
@@ -3105,7 +3104,7 @@ public final class MethodParser {
 					var.hasValue = true;
 				} else {
 					if (isFinal) ctx.report(Kind.ERROR, "block.var.final");
-					if (type == WildcardType.anyType) ctx.report(Kind.ERROR, "block.var.noAssign");
+					if (type == Types.anyType) ctx.report(Kind.ERROR, "block.var.noAssign");
 					visMap.add(var);
 				}
 			}

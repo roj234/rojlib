@@ -14,9 +14,8 @@ import roj.collect.HashSet;
 import roj.collect.IntList;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.Types;
-import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.ParamAnnotationRef;
+import roj.compiler.asm.ParamAnnotationBinder;
 import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.ParseTask;
@@ -28,6 +27,7 @@ import roj.compiler.doc.Javadoc;
 import roj.compiler.doc.JavadocProcessor;
 import roj.compiler.jpp.NativeStruct;
 import roj.compiler.resolve.NestContext;
+import roj.compiler.types.SignatureBuilder;
 import roj.io.IOUtil;
 import roj.text.ParseException;
 import roj.text.Token;
@@ -74,12 +74,12 @@ public final class LavaCompileUnit extends CompileUnit {
 
 		c.name = name.concat("$");
 		c.header(acc|_X_INNER_CLASS);
-		acc = c.modifier;
+		var flags = c.extendedFlags;
 
 		if (ctx.compiler.hasFeature(Compiler.EMIT_INNER_CLASS)) {
-			if ((acc & (ACC_INTERFACE|ACC_ENUM|_X_RECORD)) != 0) acc |= ACC_STATIC;
+			if ((flags & (ACC_INTERFACE|ACC_ENUM|_X_RECORD)) != 0) flags |= ACC_STATIC;
 
-			var desc = InnerClasses.Item.innerClass(c.name, acc);
+			var desc = InnerClasses.Item.innerClass(c.name, (int) flags);
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
 		}
@@ -87,11 +87,11 @@ public final class LavaCompileUnit extends CompileUnit {
 		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
 			addNestMember(c);
 
-		if ((acc&ACC_PROTECTED) != 0) {
-			acc &= ~ACC_PROTECTED;
-			acc |= ACC_PUBLIC;
+		if ((flags&ACC_PROTECTED) != 0) {
+			flags &= ~ACC_PROTECTED;
+			flags |= ACC_PUBLIC;
 		}
-		c.modifier = (char) (acc&~(ACC_PRIVATE|ACC_STATIC));
+		c.modifier = (char) (flags&~(ACC_PRIVATE|ACC_STATIC));
 
 		ctx.addCompileUnit(c);
 	}
@@ -430,15 +430,12 @@ public final class LavaCompileUnit extends CompileUnit {
 			if ((acc & ACC_INTERFACE) != 0) break checkExtends;
 
 			IType type = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
-			if (type.kind() > 0 || activeSignature != null) makeSignature()._add(type);
+			if (type.kind() != IType.SIMPLE_TYPE) makeSignature().set(0, type);
 			parent(type.owner());
 
 			w = wr.next();
 		} else if ((acc & ACC_ENUM) != 0) {
-			makeSignature()._add(new ParameterizedType("java/lang/Enum", Collections.singletonList(Type.klass(name))));
-		} else if (activeSignature != null) {
-			String parent = parent();
-			activeSignature._add("java/lang/Object".equals(parent) ? Types.OBJECT_TYPE : Type.klass(parent));
+			makeSignature().set(0, new ParameterizedType("java/lang/Enum", Collections.singletonList(Type.klass(name))));
 		}
 
 		structCheck:{
@@ -463,7 +460,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			if (!wr.nextIf(rParen)) do {
 				readModifiers(wr, _ACC_ANNOTATION);
 
-				IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
+				IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
 				if (type.kind() != IType.SIMPLE_TYPE) makeSignature().returns = type;
 
 				String name = wr.except(LITERAL, "cu.name").text();
@@ -522,7 +519,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			var interfaces = itfList();
 			do {
 				IType type = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
-				if (type.kind() > 0 || activeSignature != null) makeSignature()._impl(type);
+				if (type.kind() > 0) makeSignature().set(interfaces.size()+1, type);
 				interfaces.add(new CstClass(type.owner()));
 
 				w = wr.next();
@@ -548,7 +545,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 		classSignature = finishSignature(nestHost == this ? null : nestHost.classSignature, Signature.CLASS, this);
 		for (int i = 0; i < componentFieldCount; i++) {
-			var sign = (LPSignature) fields.get(i).getAttribute("Signature");
+			var sign = (SignatureBuilder) fields.get(i).getAttribute("Signature");
 			if (sign != null) sign.parent = classSignature;
 		}
 
@@ -690,7 +687,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					if (w.type() != rBracket) throw wr.err("unexpected_2:[\""+w.text()+"\",cu.except.multiArg]");
 				} else {
 					wr.retractWord();
-					type1 = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|TYPE_ALLOW_VOID|SKIP_TYPE_PARAM);
+					type1 = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|TYPE_ALLOW_VOID);
 				}
 
 				if (wr.nextIf(mul)) {
@@ -763,8 +760,8 @@ public final class LavaCompileUnit extends CompileUnit {
 
 						int acc1 = readModifiers(wr, ACC_FINAL | _ACC_ANNOTATION);
 
-						IType parType = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
-						if (parType.kind() != 0) makeSignature()._add(paramNames.size(), (ParameterizedType) parType);
+						IType parType = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
+						if (parType.kind() != 0) makeSignature().set(paramNames.size(), parType);
 
 						w = wr.next();
 						if (w.type() == varargs) {
@@ -779,7 +776,7 @@ public final class LavaCompileUnit extends CompileUnit {
 						if (p.size() > 255) ctx.report(Kind.ERROR, "cu.method.paramCount");
 
 						if (!ctx.tmpAnnotations.isEmpty()) {
-							commitAnnotations(new ParamAnnotationRef(method, w.pos(), paramNames.size()));
+							commitAnnotations(new ParamAnnotationBinder(method, w.pos(), paramNames.size()));
 						}
 
 						if (w.type() == LITERAL) {
@@ -806,7 +803,7 @@ public final class LavaCompileUnit extends CompileUnit {
 						}
 					} while (w.type() == comma);
 
-					if (w.type() != rParen) throw wr.err("unexpected:\""+w.text()+"\"");
+					if (w.type() != rParen) throw wr.err("unexpected:[\""+w.text()+"\"]");
 
 					if (isVarargs) acc |= ACC_VARARGS;
 				}
@@ -826,8 +823,8 @@ public final class LavaCompileUnit extends CompileUnit {
 
 					do {
 						IType type1 = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
+						if (type1.kind() != IType.SIMPLE_TYPE) makeSignature().setException(excList.value.size(), type1);
 						excList.value.add(type1.owner());
-						if (type1.kind() != 0) makeSignature().exceptions.add(type1);
 
 						w = wr.next();
 					} while (w.type() == comma);
@@ -1093,11 +1090,11 @@ public final class LavaCompileUnit extends CompileUnit {
 
 				do {
 					readModifiers(wr, _ACC_ANNOTATION);
-					IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
+					IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC);
 
 					method.parameters().add(type.rawType());
 
-					commitAnnotations(new ParamAnnotationRef(method, w.pos(), 0));
+					commitAnnotations(new ParamAnnotationBinder(method, w.pos(), 0));
 
 					// static final record Rgb(int r, int g, int b);
 

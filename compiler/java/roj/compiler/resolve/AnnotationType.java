@@ -63,13 +63,13 @@ public class AnnotationType {
 		for (int i = 0; i < methods.size(); i++) {
 			var method = methods.get(i);
 			if ((method.modifier() & Opcodes.ACC_STATIC) != 0) continue;
-			var defVal = method.getAttribute(node.cp(), Attribute.AnnotationDefault);
+			var defVal = method.getAttribute(node, Attribute.AnnotationDefault);
 			if (defVal != null)
 				elementDefault.put(method.name(), defVal.val == null ? new LazyValue(defVal) : defVal.val);
 			elementType.put(method.name(), method.returnType());
 		}
 
-		Annotations attr = node.getAttribute(node.cp(), Attribute.VisibleAnnotations);
+		Annotations attr = node.getAttribute(Attribute.VisibleAnnotations);
 		if (attr == null) return;
 
 		List<Annotation> list = attr.annotations;

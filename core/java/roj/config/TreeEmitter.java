@@ -40,7 +40,7 @@ public class TreeEmitter implements ValueEmitter {
 	public final void emitNull() { add(NullValue.NULL); }
 	public final void emitDate(long millis) {add(new DateValue(millis));}
 	public final void emitTimestamp(long millis) {add(new TimestampValue(millis));}
-	public final boolean supportArray() {return true;}
+	public final boolean allowArray() {return true;}
 	public final void emit(byte[] array) { add(new ByteArrayValue(array)); }
 	public final void emit(int[] array) { add(new IntArrayValue(array)); }
 	public final void emit(long[] array) { add(new LongArrayValue(array)); }

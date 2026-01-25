@@ -49,7 +49,7 @@ final class StructureRepo {
 		for (Member method : methods) {
 			if ((method.modifier()&(Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED)) == 0) continue;
 
-			Signature signature = method.getAttribute(node.cp, Attribute.SIGNATURE);
+			Signature signature = method.getAttribute(node, Attribute.SIGNATURE);
 			members.add(new MemberDescriptor(node.name(), method.name(), signature != null ? signature.toDesc() : method.rawDesc()));
 		}
 	}

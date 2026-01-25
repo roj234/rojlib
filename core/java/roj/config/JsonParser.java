@@ -280,7 +280,8 @@ public class JsonParser extends TextParser implements StreamParser {
 
 	static ParseException adaptError(TextParser wr, Exception e) {
 		ParseException err = wr.err(e.getClass().getName()+": "+e.getMessage());
-		err.setStackTrace(e.getStackTrace());
+		StackTraceElement[] stackTrace = e.getStackTrace();
+		if (stackTrace.length > 0) err.setStackTrace(stackTrace);
 		return err;
 	}
 }

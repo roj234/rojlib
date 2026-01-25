@@ -208,7 +208,7 @@ final class BinaryOp extends Expr {
 				case logic_and, logic_or, nullish_coalescing:
 					if (operator == nullish_coalescing) {
 						if (lType.isPrimitive()) ctx.report(this, Kind.ERROR, "symbol.derefPrimitive", lType);
-						type = ctx.getCommonParent(lType, rType);
+						type = ctx.compiler.getCommonAncestor(lType, rType);
 					} else {
 						type = Type.BOOLEAN_TYPE;
 					}

@@ -361,7 +361,7 @@ public class CodeWeaver implements Transformer {
 				cv.state = state;
 				cv.visit(state.method);
 
-				Code code = (Code) state.method.parsed(data.cp).getAttribute("Code");
+				Code code = (Code) state.method.parsed(data).getAttribute("Code");
 				if (code != null) copyLambdas(data, code, nx, lambdaPending);
 
 				if (state.initBci == 0 && state.mapName.equals("<init>"))
@@ -433,7 +433,7 @@ public class CodeWeaver implements Transformer {
 				nx.copied().add(node);
 				hasNew = true;
 
-				Code code = (Code) node.parsed(data.cp).getAttribute("Code");
+				Code code = (Code) node.parsed(data).getAttribute("Code");
 				if (code != null) copyLambdas(data, code, nx, lambdaPending);
 			}
 		} while (hasNew);
@@ -472,14 +472,14 @@ public class CodeWeaver implements Transformer {
 		nx.copied.remove(nx.copyClinit);
 
 		// fields
-		for (MemberNode node : nx.copied) node.parsed(data.cp);
+		for (MemberNode node : nx.copied) node.parsed(data);
 		return nx;
 	}
 	// region 补丁解析相关函数
 	private static String internalName(String className) { return className.replace('.', '/'); }
 
 	private static Map<String, Annotation> getAnnotations(Attributed node, ClassNode data) {
-		Annotations attr = node.getAttribute(data.cp, Attribute.InvisibleAnnotations);
+		Annotations attr = node.getAttribute(data, Attribute.InvisibleAnnotations);
 		if (attr == null || attr.writeIgnore()) return Collections.emptyMap();
 		HashMap<String, Annotation> map = new HashMap<>(attr.annotations.size());
 		List<Annotation> annotations = attr.annotations;
@@ -728,7 +728,7 @@ public class CodeWeaver implements Transformer {
 	}
 	private static void parseInject(IJPoint s, ClassNode data) throws WeaveException {
 		MethodNode method = s.method;
-		Code code = method.getAttribute(data.cp, Attribute.Code);
+		Code code = method.getAttribute(data, Attribute.Code);
 		if (s.initBci > 0) {
 			LineNumberTable ln = (LineNumberTable) code.getAttribute("LineNumberTable");
 			if (ln != null) {
@@ -825,14 +825,14 @@ public class CodeWeaver implements Transformer {
 				// search
 				s.matcher = getPattern(data, mn, null);
 				// replace
-				s.method.getAttribute(data.cp, Attribute.Code).instructions = getPattern(data, s.method, s);
+				s.method.getAttribute(data, Attribute.Code).instructions = getPattern(data, s.method, s);
 				break;
 		}
 	}
 	private static void copyLambdas(ClassNode data, Code code, Patch nx, List<BootstrapMethods.Item> pending) throws WeaveException {
 		for (Object o : code.instructions.nodeDataList()) {
 			if (o instanceof MemberDescriptor desc && desc.owner == null) {
-				BootstrapMethods bsm = data.getAttribute(data.cp, Attribute.BootstrapMethods);
+				BootstrapMethods bsm = data.getAttribute(data, Attribute.BootstrapMethods);
 				if (bsm == null) throw new WeaveException(data.name()+"存在错误,BootstrapMethods不存在");
 
 				BootstrapMethods.Item key = bsm.methods.get(desc.modifier);
@@ -890,7 +890,7 @@ public class CodeWeaver implements Transformer {
 		}
 	}
 	private static InsnList getPattern(ClassNode data, MethodNode method, IJPoint state) throws WeaveException {
-		Code code = method.getAttribute(data.cp, Attribute.Code);
+		Code code = method.getAttribute(data, Attribute.Code);
 		if (code == null) throw new WeaveException("方法"+method.name()+"不能是抽象的");
 
 		Label start = null, end = null;
@@ -1075,7 +1075,7 @@ public class CodeWeaver implements Transformer {
 
 
 		if (patch.lambda != null && !patch.lambda.isEmpty()) {
-			BootstrapMethods selfBSM = data.getAttribute(data.cp,Attribute.BootstrapMethods);
+			BootstrapMethods selfBSM = data.getAttribute(Attribute.BootstrapMethods);
 			if (selfBSM == null) data.addAttribute(selfBSM = new BootstrapMethods());
 
 			for (Map.Entry<BootstrapMethods.Item, List<MemberDescriptor>> entry : patch.lambda.entrySet()) {
@@ -1103,7 +1103,7 @@ public class CodeWeaver implements Transformer {
 			int last;
 			int clinit_id = data.getMethod("<clinit>");
 			if (clinit_id >= 0) {
-				code = data.methods.get(clinit_id).getAttribute(data.cp, Attribute.Code);
+				code = data.methods.get(clinit_id).getAttribute(data, Attribute.Code);
 				InsnList insn = code.instructions;
 				last = insn.getPcMap().last();
 				insn.replace(last, insn.length(), injectClInit.instructions, true);
@@ -1186,7 +1186,7 @@ public class CodeWeaver implements Transformer {
 			iin.name = "<init>";
 		}
 
-		Code mnCode = input.getAttribute(data.cp, Attribute.Code);
+		Code mnCode = input.getAttribute(data, Attribute.Code);
 		switch (s.at) {
 			case "REMOVE": return null;
 			case "REPLACE": default:

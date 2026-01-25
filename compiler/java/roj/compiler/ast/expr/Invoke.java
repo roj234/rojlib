@@ -18,11 +18,11 @@ import roj.compiler.api.Compiler;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.EnumUtil;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.compiler.runtime.SwitchMap;
+import roj.compiler.types.CompoundType;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -174,7 +174,7 @@ public final class Invoke extends Expr {
 						}
 						void a() {}
 					*/
-					for (MethodNode method : ctx.getMethodList(ctx.file, methodName).getMethods()) {
+					for (MethodNode method : ctx.compiler.getMethodList(ctx.file, methodName).getMethods()) {
 						if (ctx.canAccessSymbol(ctx.compiler.resolve(method.owner()), method, false, false)) {
 							break check;
 						}
@@ -233,7 +233,7 @@ public final class Invoke extends Expr {
 			// 如果是this，因为This表达式返回值是rawtypes，所以泛型参数会被擦到上界
 			instanceType = realExpr.type();
 			// Notfound
-			if (instanceType == WildcardType.anyType) return NaE.resolveFailed(this);
+			if (instanceType == Types.anyType) return NaE.resolveFailed(this);
 
 			if (instanceType.isPrimitive()) {
 				// 支持 4.5 .toFixed(5) 这种自定义函数
@@ -313,7 +313,7 @@ public final class Invoke extends Expr {
 			if ((flag&NONSTATIC_CHILD) == 0) {
 				var icFlags = ctx.compiler.getInnerClassInfo(methodOwner).get(methodOwner.name());
 				if (icFlags != null && (icFlags.modifier&ACC_STATIC) == 0) {
-					if (!ctx.getHierarchyList(ctx.file).containsKey(icFlags.parent)) {
+					if (!ctx.compiler.getHierarchyList(ctx.file).containsKey(icFlags.parent)) {
 						ctx.report(this, Kind.ERROR, "cu.inheritNonStatic", icFlags.parent);
 						return NaE.resolveFailed(this);
 					} else {
@@ -384,7 +384,7 @@ public final class Invoke extends Expr {
 				argTypes = Collections.singletonList(new ParameterizedType("java/lang/Class", Collections.singletonList(type1)));
 			} else if (method == LavaCompiler.arrayClone()) {
 				// 数组clone的特殊处理，实际返回Object，在使用处转型为instanceType
-				argTypes = Collections.singletonList(WildcardType.genericReturn(instanceType, Types.OBJECT_TYPE));
+				argTypes = Collections.singletonList(CompoundType.genericReturn(instanceType, Types.OBJECT_TYPE));
 			} else {
 				argTypes = r.desc();
 			}
@@ -477,7 +477,7 @@ public final class Invoke extends Expr {
 		return false;
 	}
 	@Override
-	public IType type() { return expr instanceof IType ? ((IType) expr) : argTypes != null ? argTypes.get(argTypes.size()-1) : WildcardType.anyType; }
+	public IType type() { return expr instanceof IType ? ((IType) expr) : argTypes != null ? argTypes.get(argTypes.size()-1) : Types.anyType; }
 
 	private boolean checkTailrec(CompileContext ctx, MethodWriter cw) {
 		var mn = method;
@@ -568,7 +568,7 @@ public final class Invoke extends Expr {
 		if ((flag&POLYSIGN) != 0) {
 			method.setReturnType(_returnType == NORET
 					? Type.VOID_TYPE
-					: _returnType.getType1().rawType());
+					: _returnType.getTarget().rawType());
 		}
 
 		// 静态方法时为null

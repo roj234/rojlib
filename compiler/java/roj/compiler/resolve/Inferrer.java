@@ -1,6 +1,7 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
@@ -11,13 +12,16 @@ import roj.collect.HashMap;
 import roj.compiler.CompileContext;
 import roj.compiler.LavaCompiler;
 import roj.compiler.api.Types;
-import roj.compiler.asm.WildcardType;
-import roj.compiler.ast.expr.Lambda;
+import roj.compiler.diagnostic.IText;
+import roj.compiler.diagnostic.Kind;
+import roj.compiler.types.CompoundType;
+import roj.compiler.types.LambdaForm;
 import roj.util.ArrayCache;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 方法重载(overload)和覆盖(override)有关的判断
@@ -32,21 +36,20 @@ public final class Inferrer {
 	private static final int LEVEL_DEPTH = 5120;
 
 	private final CompileContext ctx;
-	private final TypeCast castChecker = new TypeCast();
+	private final TypeCast castChecker;
 
 	// 类型参数的当前类型
-	private final Map<String, IType> typeParams = new HashMap<>();
-	// 类型参数的上界
-	private final Map<String, List<IType>> typeParamBounds = new HashMap<>();
+	private final Map<TypeVariableDeclaration, IType> typeParams = new HashMap<>();
+	//private final Map<TypeVariableDeclaration, List<IType>> constrain;
 
 	@Nullable
 	private Signature sign;
-	private IType[] bounds;
+	private IType[] constrains;
 
 	public Inferrer(CompileContext ctx) {
 		this.ctx = ctx;
-		this.castChecker.typeParams = typeParamBounds;
-		this.castChecker.context = ctx.compiler;
+		this.castChecker = new TypeCast(ctx.compiler);
+		this.castChecker.genericContext = typeParams;
 	}
 
 	// 泛型附加上界, 可以用来缩小上界的范围，但是没啥用
@@ -63,41 +66,30 @@ public final class Inferrer {
 	 */
 	@SuppressWarnings("fallthrough")
 	public MethodResult resolveInvocation(ClassNode declaringClass, MethodNode method, IType instanceType, List<IType> arguments) {
-		this.castChecker.context = ctx.compiler;
-
 		List<? extends IType> mpar;
 		int mnSize;
 
-		sign = method.getAttribute(declaringClass.cp, Attribute.SIGNATURE);
+		typeParams.clear();
+
+		sign = method.getAttribute(declaringClass, Attribute.SIGNATURE);
 		if (sign != null) {
-			typeParamBounds.clear();
-			typeParams.clear();
-
 			int len = sign.values.size()-1;
-			if (bounds == null || bounds.length < len) bounds = new IType[len];
+			if (constrains == null || constrains.length < len) constrains = new IType[len];
 
-			Map<String, List<IType>> myTP = sign.typeVariables;
-			typeParamBounds.putAll(myTP);
+			var myTP = sign.typeVariables;
 
 			if (manualTPBounds != null) {
 				if (manualTPBounds.size() != myTP.size()) return FAIL_ARGCOUNT;
 
 				int i = 0;
-				for (String name : myTP.keySet())
-					typeParams.put(name, manualTPBounds.get(i++));
+				for (var decl : myTP)
+					typeParams.put(decl, manualTPBounds.get(i++));
 			}
 
-			Signature classSign = declaringClass.getAttribute(declaringClass.cp, Attribute.SIGNATURE);
-			block:
-			if (classSign != null) {
-				for (Map.Entry<String, List<IType>> entry : classSign.typeVariables.entrySet()) {
-					typeParamBounds.putIfAbsent(entry.getKey(), entry.getValue());
-				}
-
-				if (instanceType == null) break block;
-
+			Signature classSign = declaringClass.getAttribute(Attribute.SIGNATURE);
+			if (classSign != null && instanceType != null) {
 				if (!instanceType.owner().equals(declaringClass.name())) {
-					List<IType> myBounds = ctx.inferGeneric(instanceType, declaringClass.name());
+					List<IType> myBounds = ctx.compiler.inferGeneric(instanceType, declaringClass.name());
 
 					assert myBounds != null;
 					ParameterizedType g = new ParameterizedType(declaringClass.name(), ParameterizedType.NO_WILDCARD);
@@ -105,25 +97,23 @@ public final class Inferrer {
 					instanceType = g;
 				} else if (instanceType.kind() == IType.CAPTURED_WILDCARD) {
 					// 解决了问题，但是它*必须*放在这里么
-					instanceType = ((WildcardType) instanceType).getBound();
+					instanceType = ((CompoundType) instanceType).getBound();
 				}
 
 				boundPreCheck:
 				if (instanceType instanceof ParameterizedType gHint) {
 					// TODO 非静态 泛型 内部类
 					assert gHint.sub == null : "dynamic subclass not supported at this time";
-					if (gHint.typeParameters.size() != typeParamBounds.size()) {
-						if (gHint.typeParameters.size() == 1 && gHint.typeParameters.get(0) == WildcardType.anyGeneric)
+					if (gHint.typeParameters.size() != classSign.typeVariables.size()) {
+						if (gHint.typeParameters.size() == 1 && gHint.typeParameters.get(0) == Types.anyGeneric)
 							break boundPreCheck;
 
 						return FAIL_GENERIC;
 					}
 
 					int i = 0;
-					for (String name : classSign.typeVariables.keySet()) {
-						if (!myTP.containsKey(name)) typeParams.put(name, gHint.typeParameters.get(i));
-
-						i++;
+					for (var decl : classSign.typeVariables) {
+						typeParams.putIfAbsent(decl, gHint.typeParameters.get(i++));
 					}
 				}
 			}
@@ -169,8 +159,7 @@ public final class Inferrer {
 					if (cast.type >= 0) {
 						if (type.array() == 1 && "java/lang/Object".equals(type.owner())) {
 							if (!type.equals(bound)) {
-								// TODO Dangerous!
-								ctx.report(roj.compiler.diagnostic.Kind.SEVERE_WARNING, "不确定的对象类型");
+								ctx.report(roj.compiler.diagnostic.Kind.SEVERE_WARNING, "对象数组被赋予了不确定的类型");
 							}
 						}
 						dvc = true;
@@ -194,15 +183,19 @@ public final class Inferrer {
 				if (cast.type < _minCastAllow)
 					return FAIL(i, from, componentType, cast);
 
-				bound = ctx.getCommonParent(from, bound);
+				bound = ctx.compiler.getCommonAncestor(from, bound);
 				distance += cast.distance;
 			}
 
-			if (sign != null) bounds[vararg] = bound;
+			if (sign != null) {
+				bound = bound.clone();
+				bound.setArrayDim(bound.array()+1);
+				constrains[vararg] = bound;
+			}
 			inSize = vararg;
 		} else if (mnSize != inSize) return FAIL_ARGCOUNT;
 
-		boolean hasBox = false;
+		boolean hasBoxing = false;
 		for (int i = 0; i < inSize; i++) {
 			IType from = arguments.get(i), to = mpar.get(i);
 
@@ -213,21 +206,24 @@ public final class Inferrer {
 				default: return FAIL(i, from, to, cast);
 
 				// 装箱/拆箱 第二步
-				case TypeCast.UNBOXING: case TypeCast.BOXING: hasBox = true;
+				case TypeCast.UNBOXING: case TypeCast.BOXING: hasBoxing = true;
 				case TypeCast.NUMBER_UPCAST: case TypeCast.UPCAST: distance += cast.distance; break;
 			}
 
-			if (sign != null) bounds[i] = from;
+			if (sign != null) constrains[i] = from;
 		}
 
-		if (hasBox) distance += LEVEL_DEPTH;
+		if (hasBoxing) distance += LEVEL_DEPTH;
 
 		return applyInferredTypes(new MethodResult(method, distance, dvc));
 	}
 
-	public MethodResult getGenericParameters(ClassNode declaringClass, MethodNode method, @Nullable IType instanceType) {
+	public MethodResult getSubstitutedParameters(ClassNode declaringClass, MethodNode method, @Nullable IType instanceType) {
 		overrideMode = true;
 		MethodResult mr = resolveInvocation(declaringClass, method, instanceType instanceof ParameterizedType g ? g : null, Collections.emptyList());
+		if (mr.distance < 0) {
+			throw new IllegalStateException("Unexpected error: "+declaringClass.name()+"."+method+" on "+instanceType);
+		}
 		overrideMode = false;
 		return mr;
 	}
@@ -235,7 +231,7 @@ public final class Inferrer {
 	/**
 	 * 警告: override mode现在不检查参数数量
 	 */
-	public boolean validateOverrideCompatibility(CompileContext ctx, MethodNode superMethod, Type instanceType, List<IType> subMethodArgs, List<IType> superMethodArgs) {
+	public boolean validateOverrideGenericCompatibility(CompileContext ctx, MethodNode superMethod, Type instanceType, List<IType> subMethodArgs, List<IType> superMethodArgs) {
 		ClassNode owner = ctx.compiler.resolve(superMethod.owner());
 
 		if (!ctx.canAccessSymbol(owner, superMethod, false, true)) return false;
@@ -250,7 +246,16 @@ public final class Inferrer {
 			switch (cast.type) {
 				default: {
 					error = FAIL(i, from, to, cast);
-					MethodListSingle.reportError(ctx, instanceType, subMethodArgs, superMethod, error);
+
+					IText rest = IText.empty().append(
+						IText.translatable("invoke.except").append(MethodList.renderParameters(superMethod)).append("\n")
+					).append(
+						MethodList.getFoundText(subMethodArgs).prepend("  ").append("\n")
+					).append(
+						IText.translatable("invoke.reason").append(MethodList.getReason(superMethod, instanceType, error)).prepend("  ").append("\n")
+					);
+
+					ctx.report(Kind.ERROR, "cu.override.unable", ctx.currentCodeBlockForReport(), ctx.resolve(superMethod.owner()), superMethod, rest);
 				}
 				case TypeCast.LOSSY, TypeCast.IMPLICIT, TypeCast.UNBOXING, TypeCast.NUMBER_UPCAST, TypeCast.UPCAST:
 			}
@@ -262,7 +267,7 @@ public final class Inferrer {
 
 	@Deprecated
 	private TypeCast.Cast overrideCast(IType from, IType to) {
-		if (to instanceof TypeVariable n) to = typeParams.get(n.name);
+		if (to instanceof TypeVariable n) to = typeParams.get(n.name());
 		if (from.equals(to)) return TypeCast.RESULT(0, 0);
 
 		if (from.kind() <= IType.PARAMETERIZED_TYPE) {
@@ -285,51 +290,53 @@ public final class Inferrer {
 
 		return TypeCast.ERROR(TypeCast.IMPOSSIBLE);
 	}
+
 	private TypeCast.Cast cast(IType from, IType to) {
-		int lambdaArgCount = Lambda.getLambdaArgc(from);
-		if (lambdaArgCount >= 0) {
-			if (lambdaArgCount == Lambda.ARGC_UNKNOWN)
-				return TypeCast.RESULT(TypeCast.UPCAST, 0);
-
-			if (!to.isPrimitive()) {
-				var mn = ctx.compiler.link(ctx.resolve(to)).getLambdaMethod();
-				if (mn != null) {
-					if (mn.parameters().size() == lambdaArgCount) {
-						List<IType> fromArgs = Lambda.getLambdaArgs(from);
-						if (fromArgs == null) return TypeCast.RESULT(TypeCast.UPCAST, 0);
-
-						List<IType> toArgs = ctx.inferGeneric(to, mn).parameters();
-						int distance = 0;
-						for (int i = 0; i < lambdaArgCount; i++) {
-							var cast = castChecker.checkCast(fromArgs.get(i), toArgs.get(i));
-							if (cast.type < 0) return TypeCast.RESULT(-96, lambdaArgCount);
-
-							distance += cast.distance;
-						}
-						return TypeCast.RESULT(TypeCast.UPCAST, distance);
-					}
-				}
-			}
-			return TypeCast.RESULT(-99/*无效的函数接口; 仅定义在i18n中*/, lambdaArgCount);
-		}
+		int lambdaArgCount = LambdaForm.getLambdaArgc(from);
+		if (lambdaArgCount >= 0) return lambdaCast(from, to, lambdaArgCount);
 
 		return castChecker.checkCast(from, to);
 	}
+	private TypeCast.Cast lambdaCast(IType from, IType to, int lambdaArgCount) {
+		if (lambdaArgCount == LambdaForm.ARGC_UNKNOWN)
+			return TypeCast.RESULT(TypeCast.UPCAST, 0);
+
+		if (!to.isPrimitive()) {
+			var lambdaMethod = ctx.compiler.link(ctx.resolve(to)).getLambdaMethod();
+			if (lambdaMethod != null) {
+				if (lambdaMethod.parameters().size() == lambdaArgCount) {
+					List<IType> fromArgs = LambdaForm.getLambdaArgs(from);
+					if (fromArgs == null) return TypeCast.RESULT(TypeCast.UPCAST, 0);
+
+					List<IType> toArgs = ctx.inferGeneric(to, lambdaMethod).parameters();
+					int distance = 0;
+					for (int i = 0; i < lambdaArgCount; i++) {
+						var cast = castChecker.checkCast(fromArgs.get(i), toArgs.get(i));
+						if (cast.type < 0) return TypeCast.RESULT(-96, lambdaArgCount);
+
+						distance += cast.distance;
+					}
+					return TypeCast.RESULT(TypeCast.UPCAST, distance);
+				}
+			}
+		}
+		return TypeCast.RESULT(-99/*无效的函数接口; 仅定义在i18n中*/, lambdaArgCount);
+	}
+
 	private static MethodResult FAIL(int pos, IType from, IType to, TypeCast.Cast cast) { return new MethodResult(cast.type, from, to, pos); }
 
 	private MethodResult applyInferredTypes(MethodResult r) {
 		if (sign == null) return r;
 
 		for (int i = 0; i < sign.values.size()-1; i++) {
-			if (bounds[i] == null) continue;
+			if (constrains[i] == null) continue;
 			try {
-				constrainTypeVariables(bounds[i], sign.values.get(i));
+				constrainTypeVariables(constrains[i], sign.values.get(i));
 			} catch (UnableCastException e) {
 				return FAIL(i,e.from,e.to,e.code);
 			}
-			bounds[i] = null;
+			constrains[i] = null;
 		}
-		substituteMissingTypeParametersToBound(typeParamBounds, typeParams);
 
 		if (!sign.values.isEmpty()) {
 			r.desc = new IType[sign.values.size()];
@@ -349,7 +356,7 @@ public final class Inferrer {
 
 		return r;
 	}
-	private IType substitute(IType type) { return substituteTypeVariables(type, typeParams, typeParamBounds); }
+	private IType substitute(IType type) { return substituteTypeVariables(type, typeParams); }
 
 	@SuppressWarnings("fallthrough")
 	@Contract(pure = true)
@@ -391,67 +398,81 @@ public final class Inferrer {
 	 * @throws IllegalArgumentException if sizes mismatch.
 	 */
 	@Contract(pure = true, value = "_, _ -> new")
-	public static Map<String, IType> createSubstitutionMap(Map<String, List<IType>> typeVariables, List<IType> typeParameters) {
+	public static Map<TypeVariableDeclaration, IType> createSubstitutionMap(Set<TypeVariableDeclaration> typeVariables, List<IType> typeParameters) {
 		if (typeParameters.size() != typeVariables.size())
 			throw new IllegalArgumentException("类型参数的长度("+typeParameters.size()+") != 类型变量的长度("+typeVariables.size()+")");
 
-		Map<String, IType> output = new HashMap<>(typeParameters.size());
+		Map<TypeVariableDeclaration, IType> output = new HashMap<>(typeParameters.size());
 		int i = 0;
-		for (String name : typeVariables.keySet()) {
-			output.put(name, typeParameters.get(i++));
+		for (var decl : typeVariables) {
+			output.put(decl, typeParameters.get(i++));
 		}
 
 		return output;
 	}
-	/**
-	 * Infers wildcard bounds (e.g., ? extends T) for missing type variable substitutions.
-	 */
-	public static void substituteMissingTypeParametersToBound(Map<String, List<IType>> typeVariables, Map<String, IType> typeParameters) {
-		for (Map.Entry<String, List<IType>> entry : typeVariables.entrySet()) {
-			if (!typeParameters.containsKey(entry.getKey())) {
-				var value = entry.getValue();
-				// 这里返回any的反向 - nullType => [? extends T] 可以upcast转换为任意继承T的对象，而不是downcast
-				typeParameters.put(entry.getKey(), new WildcardType(value.get(0).kind() == IType.OBJECT_BOUND ? value.subList(1, value.size()) : value));
-			}
-		}
+
+	private static @NotNull IType substituteToBound(TypeVariableDeclaration decl) {
+		// 这里返回any的反向 - nullType => [? extends T] 可以upcast转换为任意继承T的对象，而不是downcast
+		return CompoundType.intersection(decl.get(0).kind() == IType.OBJECT_BOUND ? decl.subList(1, decl.size()) : decl);
 	}
+
 	/**
 	 * Substitutes type variables with their actual types from the substitution map.
 	 * Handles cloning for mutations, wildcards, and array dimensions.
 	 * @return The resolved type (may be cloned if modified).
 	 */
 	@Contract(pure = true)
-	public static IType substituteTypeVariables(IType type, Map<String, IType> substitution, Map<String, List<IType>> typeVariables) {
+	public static IType substituteTypeVariables(IType type, Map<TypeVariableDeclaration, IType> substitution) {
 		switch (type.kind()) {
 			case IType.TYPE_VARIABLE -> {
 				TypeVariable variable = (TypeVariable) type;
 
-				var actualType = substitution.get(variable.name);
-				if (actualType == null) throw new IllegalArgumentException("缺少类型参数"+variable);
+				var actualType = substitution.get(variable.decl);
+				if (actualType == null) {
+					IType wildcardType = substituteToBound(variable.decl);
+					if (variable.array() != 0) {
+						wildcardType = wildcardType.clone();
+						wildcardType.setArrayDim(wildcardType.array() + variable.array());
+					}
+					return wildcardType;
+				}
 
-				if (actualType.kind() == IType.BOUNDED_WILDCARD) return actualType;
 				if (actualType.kind() == IType.UNBOUNDED_WILDCARD) return Types.OBJECT_TYPE;//Asterisk.anyType;
+				if (actualType.kind() == IType.ANY_TYPE) return actualType;
 
-				if (variable.array() != actualType.array()) throw new IllegalArgumentException("数组层次错误: "+variable+" cannot cast to "+actualType);
-				/*if (variable.array() > 0) {
+				boolean cloned = false;
+				// 260128: 此刻，我确实可以不带任何怀疑的写下这一行了（
+				if (variable.array() != 0) {
+					cloned = true;
 					actualType = actualType.clone();
-					actualType.setArrayDim(variable.array());
-				}*/
+					actualType.setArrayDim(actualType.array() + variable.array());
+				}
 
-				var bound = typeVariables.get(variable.name);
 				if (variable.wildcard == ParameterizedType.SUPER_WILDCARD) {
+					if (actualType instanceof ParameterizedType pt) {
+						if (!cloned) pt = (ParameterizedType) pt.clone();
+						pt.wildcard = ParameterizedType.SUPER_WILDCARD;
+						return pt;
+					}
+					if (actualType instanceof Type simpleType) {
+						return new ParameterizedType(simpleType.owner, simpleType.array(), ParameterizedType.SUPER_WILDCARD);
+					}
+
 					LavaCompiler.debugLogger().warn("EX_SUPER how to deal? typeParam={}, substitution={}", variable, actualType);
 					return actualType;
 				}
 
-				return WildcardType.genericReturn(actualType, bound.get(bound.get(0).kind() == IType.OBJECT_BOUND ? 1 : 0));
+				if (actualType.kind() == IType.BOUNDED_WILDCARD) return actualType;
+
+				var bound = variable.decl;
+				return CompoundType.genericReturn(actualType, bound.get(bound.get(0).kind() == IType.OBJECT_BOUND ? 1 : 0));
 			}
 			case IType.BOUNDED_WILDCARD -> {
-				WildcardType t = (WildcardType) type;
+				CompoundType t = (CompoundType) type;
 				List<IType> traits = t.getTraits();
 				for (int i = 0; i < traits.size(); i++) {
 					IType prev = traits.get(i);
-					IType elem = substituteTypeVariables(prev, substitution, typeVariables);
+					IType elem = substituteTypeVariables(prev, substitution);
 
 					if (prev != elem) {
 						if (type == t) {
@@ -470,7 +491,7 @@ public final class Inferrer {
 				List<IType> parameters = t.typeParameters;
 				for (int i = 0; i < parameters.size(); i++) {
 					IType prev = parameters.get(i);
-					IType elem = substituteTypeVariables(prev, substitution, typeVariables);
+					IType elem = substituteTypeVariables(prev, substitution);
 
 					if (prev != elem) {
 						if (type == t) {
@@ -483,7 +504,7 @@ public final class Inferrer {
 				}
 
 				if (t.sub != null) {
-					var elem = substituteTypeVariables(t.sub, substitution, typeVariables);
+					var elem = substituteTypeVariables(t.sub, substitution);
 					if (t.sub != elem && type == t) {
 						t = t.clone();
 						t.sub = (GenericSub) elem;
@@ -515,29 +536,38 @@ public final class Inferrer {
 			break;
 			case Type.TYPE_VARIABLE:
 				TypeVariable tp = (TypeVariable) inputType;
-				if (targetType.isPrimitive() && !isPrimitiveVariable(tp))
-					targetType = Type.getWrapper(targetType.rawType());
 				updateTypeVariableBound(tp, targetType);
 			break;
 		}
 	}
 	private boolean isPrimitiveVariable(TypeVariable tp) {
-		IType type = typeParams.get(tp.name);
-		// TODO
+		IType type = typeParams.get(tp.decl);
+		// TODO 这些似乎都可以不需要了？
 		return false;
 	}
-	private void updateTypeVariableBound(TypeVariable tp, IType type) {
-		IType bound = typeParams.get(tp.name);
-		if (tp.wildcard != ParameterizedType.NO_WILDCARD) {
-			type = new ParameterizedType(type.owner(), type.array()+tp.array(), tp.wildcard);
-		} else if (tp.array() != 0) {
-			type = type.clone();
-			type.setArrayDim(tp.array());
+
+	/**
+	 * 基于新的constrain更新tv当前的类型(bound)
+	 */
+	private void updateTypeVariableBound(TypeVariable tv, IType constrain) {
+		int arrayDim = constrain.array() - tv.array();
+		assert arrayDim >= 0;
+
+		IType bound = typeParams.get(tv.decl);
+		/*if (tv.wildcard != ParameterizedType.NO_WILDCARD) {
+			constrain = new ParameterizedType(constrain.owner(), arrayDim, tv.wildcard);
+		} else */
+		if (arrayDim != constrain.array()) {
+			constrain = constrain.clone();
+			constrain.setArrayDim(arrayDim);
 		}
 
+		if (constrain.isPrimitive() && !isPrimitiveVariable(tv))
+			constrain = Type.getWrapper(constrain.rawType());
+
 		// equals是为了防止出现两个null type (但是可以出现两个asterisk type)
-		bound = bound == null || type.equals(bound) ? type : findMostSpecificType(type, bound);
-		typeParams.put(tp.name, bound);
+		bound = bound == null || constrain.equals(bound) ? constrain : findMostSpecificType(constrain, bound);
+		typeParams.put(tv.decl, bound);
 	}
 	// TODO 优化，使用FrameVisitor那边的实现
 	private IType findMostSpecificType(IType a, IType b) {

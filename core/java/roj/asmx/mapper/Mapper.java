@@ -364,7 +364,7 @@ public class Mapper extends Mapping {
 		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
-			var found = Annotation.findInvisible(data.cp, data, "roj/asmx/mapper/Inherited");
+			var found = Annotation.findInvisible(data, data, "roj/asmx/mapper/Inherited");
 			if (found != null) {
 				var value = found.getList("value");
 				for (int i = 0; i < value.size(); i++) {
@@ -938,7 +938,7 @@ public class Mapper extends Mapping {
 	}
 	/** Field name and type in 'Record' attribute */
 	private void mapRecord(MemberDescriptor d, ClassNode node) {
-		RecordAttribute r = node.getAttribute(node.cp, Attribute.Record);
+		RecordAttribute r = node.getAttribute(Attribute.Record);
 		if (r == null) return;
 
 		ClassUtil U = ClassUtil.getInstance();
@@ -978,7 +978,7 @@ public class Mapper extends Mapping {
 				case Constant.FIELD -> mapRef(node, (CstRef) c, false);
 				case Constant.INVOKE_DYNAMIC -> {
 					if (bsm == null) {
-						bsm = node.getAttribute(node.cp, Attribute.BootstrapMethods);
+						bsm = node.getAttribute(Attribute.BootstrapMethods);
 						if (bsm == null) throw new IllegalArgumentException("有lambda却无BootstrapMethod, "+node.name());
 					}
 					mapLambda(bsm, node, (CstDynamic) c);
@@ -1076,18 +1076,18 @@ public class Mapper extends Mapping {
 		ClassNode data = ctx.getData();
 
 		mapInnerClass(U, data);
-		mapSignature(data.cp, data);
+		mapSignature(data, data);
 		mapNodeAndAttrAndParam(U, data);
 		mapAnnotations(U, data.cp, data);
-		mapEnclosingMethod(U, data.cp, data);
+		mapEnclosingMethod(U, data);
 
 		data.unparsed(); // serialize to cp
 		mapConstant(U, data.cp);
 		mapClassAndSuper(data);
 	}
 	/** EnclosingMethod type & name */
-	private void mapEnclosingMethod(ClassUtil U, ConstantPool cp, ClassNode data) {
-		EnclosingMethod attribute = data.getAttribute(cp, Attribute.EnclosingMethod);
+	private void mapEnclosingMethod(ClassUtil U, ClassNode data) {
+		EnclosingMethod attribute = data.getAttribute(Attribute.EnclosingMethod);
 		if (attribute != null && attribute.name != EnclosingMethod.PREDEFINED) {
 			MemberDescriptor d = U.sharedDesc;
 			d.owner = attribute.owner;
@@ -1197,8 +1197,8 @@ public class Mapper extends Mapping {
 		}
 	}
 	/** Generic signature type */
-	private void mapSignature(ConstantPool pool, Attributed node) {
-		Signature generic = node.getAttribute(pool, Attribute.SIGNATURE);
+	private void mapSignature(ClassNode cn, Attributed node) {
+		Signature generic = node.getAttribute(cn, Attribute.SIGNATURE);
 		if (generic != null) generic.rename(signatureMapper);
 	}
 	/** Class name and parent */
@@ -1219,7 +1219,7 @@ public class Mapper extends Mapping {
 
 			if (newCls != null) field.rawDesc(newCls);
 
-			mapSignature(data.cp, field);
+			mapSignature(data, field);
 			mapAnnotations(U, data.cp, field);
 		}
 
@@ -1232,7 +1232,7 @@ public class Mapper extends Mapping {
 
 			if (!oldCls.equals(newCls)) method.rawDesc(newCls);
 
-			mapSignature(data.cp, method);
+			mapSignature(data, method);
 			mapAnnotations(U, data.cp, method);
 		}
 	}
@@ -1276,7 +1276,7 @@ public class Mapper extends Mapping {
 
 	public final void S5_1_resetDebugInfo(Context ctx) {
 		ClassNode data = ctx.getData();
-		StringAttribute sourceFile = data.getAttribute(data.cp, Attribute.SourceFile);
+		StringAttribute sourceFile = data.getAttribute(data, Attribute.SourceFile);
 		if (sourceFile != null) {
 			String name = data.name();
 			int $ = name.indexOf('$');

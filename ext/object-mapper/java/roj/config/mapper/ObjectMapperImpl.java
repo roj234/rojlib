@@ -632,7 +632,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 		int ser;
 		if (klassOut != null && !klassOut.equals("java/lang/String")) {
 			String genSig;
-			Signature signature = writer.getAttribute(data.cp, Attribute.SIGNATURE);
+			Signature signature = writer.getAttribute(data, Attribute.SIGNATURE);
 			if (signature != null) {
 				IType ret = signature.values.get(signature.values.size() - 1);
 				genSig = ret.toDesc();
@@ -872,7 +872,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 		String defaultReadMode = "REQUIRED";
 
 		ArrayList<FieldNode> fields = data.fields;
-		var list1 = Annotations.getAnnotations(data.cp, data, false);
+		var list1 = Annotations.getAnnotations(data, data, false);
 		list1 = fp.customizeFieldAnnotations(data, null, list1);
 		for (int i1 = 0; i1 < list1.size(); i1++) {
 			var opt = list1.get(i1);
@@ -897,7 +897,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = fields.get(i);
-			List<Annotation> list = Annotations.getAnnotations(data.cp, f, false);
+			List<Annotation> list = Annotations.getAnnotations(data, f, false);
 			list = fp.customizeFieldAnnotations(data, f, list);
 
 			if ((f.modifier() & (ACC_TRANSIENT|ACC_STATIC|ACC_SYNTHETIC)) != 0) continue;
@@ -1294,8 +1294,8 @@ final class ObjectMapperImpl extends ObjectMapper {
 		if (actualType == Type.OBJECT && !"java/lang/String".equals(type.getActualClass())) {
 			int id;
 			String serType = type.getActualClass();
-			Signature serSig = fn.getAttribute(data.cp, Attribute.SIGNATURE);
-			id = ser(serType, serSig != null ? typeParamToRaw(serSig, data.getAttribute(data.cp, Attribute.SIGNATURE)) : null);
+			Signature serSig = fn.getAttribute(data, Attribute.SIGNATURE);
+			id = ser(serType, serSig != null ? typeParamToRaw(serSig, data.getAttribute(Attribute.SIGNATURE)) : null);
 
 			keySwitch.branch(fieldId, cw.label());
 			cw.insn(ALOAD_1);
@@ -1376,7 +1376,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 	}
 	private String typeParamToRaw(Signature fieldSig, Signature typeSig) {
 		Function<TypeVariable, IType> mapper = n -> {
-			IType bound = typeSig.typeVariables.get(n.name).get(0);
+			IType bound = typeSig.typeVariables.get(n.name()).get(0);
 			int array = n.array();
 			if (array != 0) {
 				bound = bound.clone();

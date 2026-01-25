@@ -2,6 +2,7 @@ package roj.asm.attr;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Attributed;
+import roj.asm.ClassNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
@@ -40,8 +41,8 @@ public final class Annotations extends Attribute {
 	public List<Annotation> annotations;
 
 	@NotNull
-	public static List<Annotation> getAnnotations(ConstantPool cp, Attributed node, boolean vis) {
-		var attr = node.getAttribute(cp, vis? VisibleAnnotations : InvisibleAnnotations);
+	public static List<Annotation> getAnnotations(ClassNode cn, Attributed node, boolean vis) {
+		var attr = node.getAttribute(cn, vis? VisibleAnnotations : InvisibleAnnotations);
 		return attr == null ? Collections.emptyList() : attr.annotations;
 	}
 

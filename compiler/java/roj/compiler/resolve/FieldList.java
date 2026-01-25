@@ -9,7 +9,10 @@ import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.FieldAccessHook;
+import roj.compiler.diagnostic.IText;
 import roj.text.CharList;
+
+import static roj.compiler.diagnostic.IText.translatable;
 
 /**
  * 主要是处理权限和泛型
@@ -53,9 +56,12 @@ final class FieldList extends ComponentList {
 			}
 		}
 
-		CharList sb = new CharList().append("memberAccess.incompatible.plural:[");
+		CharList sb = new CharList().append(":[");
 
+		String name = fields.get(0).name();
 		sb.append(fields.get(0).name()).append(",[");
+
+		IText rest = IText.empty();
 
 		ctx.enableErrorCapture();
 
@@ -64,13 +70,13 @@ final class FieldList extends ComponentList {
 			FieldNode fn = fields.get(i);
 
 			ctx.canAccessSymbol(owner, fn, (flags&IN_STATIC) != 0, true);
-			sb.append("\"  \",symbol.field,").append(owner.name()).append('.').append(fn.name());
-			sb.append(",invoke.notApplicable,").append(ctx.getCapturedError()).append(",\"\n\",");
+
+			rest.append("  ").append(translatable("symbol.field")).append(owner.name()+"."+fn.name())
+				.append(translatable("invoke.notApplicable")).append(ctx.getCapturedError()).append("\n");
 		}
-		sb.setLength(sb.length()-1);
 
 		ctx.disableErrorCapture();
-		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
+		return new FieldResult(translatable("memberAccess.incompatible.plural", name, rest));
 	}
 
 	static void checkBridgeMethod(CompileContext ctx, ClassNode owner, FieldNode fn) {

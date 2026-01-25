@@ -65,9 +65,9 @@ public final class MethodNode extends MemberNode {
 	private List<Type> in;
 	private Type out;
 
-	public MethodNode parsed(ConstantPool cp) {
+	public MethodNode parsed(ClassNode owner) {
 		if (attributes != null) {
-			Attribute.parseAll(this, cp, attributes, Signature.METHOD);
+			Attribute.parseAll(this, owner, attributes, Signature.METHOD);
 		}
 		return this;
 	}
@@ -96,20 +96,35 @@ public final class MethodNode extends MemberNode {
 	}
 
 	@Override
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this, cp, type, attributes, Signature.METHOD); }
+	public <T extends Attribute> T getAttribute(ClassNode owner, TypedKey<T> type) {
+		return Attribute.parseSingle(this, owner, type, attributes, Signature.METHOD);
+	}
 
 	@NotNull
-	public final Signature getSignature(ConstantPool cp) {
-		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+	public final Signature getSignature(ClassNode owner) {
+		Signature signature = getAttribute(owner, Attribute.SIGNATURE);
 		if (signature == null) {
 			signature = new Signature(Signature.METHOD);
-			ClassListAttribute exceptions = getAttribute(cp, Attribute.Exceptions);
+			ClassListAttribute exceptions = getAttribute(owner, Attribute.Exceptions);
 			if (exceptions != null)
 				signature.exceptions = Helpers.cast(Flow.of(exceptions.value).map(Type::klass).toList());
 			signature.values = Helpers.cast(Type.getMethodTypes(rawDesc()));
 			addAttribute(signature);
 		}
 		return signature;
+	}
+
+	public Code getCode(ClassNode cn) {
+		AttributeList list = attributes;
+		if (list == null) return null;
+		Object code = list.getByName("Code");
+		if (code instanceof AttrCodeWriter acw) {
+			var attr = UnparsedAttribute.serialize(cn.cp, AsmCache.buf(), acw);
+			list.add(attr);
+			code = attr;
+		}
+		if (code instanceof Code code1) return code1;
+		return getAttribute(cn, Attribute.Code);
 	}
 
 	public String rawDesc() {
@@ -142,14 +157,12 @@ public final class MethodNode extends MemberNode {
 
 	public String toString() { return toString(new CharList(), null, 0).toStringAndFree(); }
 	public CharList toString(CharList sb, ClassNode owner, int prefix) {
-		ConstantPool cp = owner == null ? null : owner.cp;
-
 		Annotations a;
 
 		if (getAttribute("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
-		a = getAttribute(cp, Attribute.VisibleAnnotations);
+		a = getAttribute(owner, Attribute.VisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = getAttribute(cp, Attribute.InvisibleAnnotations);
+		a = getAttribute(owner, Attribute.InvisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
 		sb.padEnd(' ', prefix);
@@ -160,7 +173,7 @@ public final class MethodNode extends MemberNode {
 		if (!name().equals("<clinit>")) {
 			parameters();
 
-			Signature sig = getAttribute(cp, Attribute.SIGNATURE);
+			Signature sig = getAttribute(owner, Attribute.SIGNATURE);
 
 			if (sig != null && !sig.typeVariables.isEmpty()) {
 				sig.getTypeVariables(sb).append(' ');
@@ -178,14 +191,14 @@ public final class MethodNode extends MemberNode {
 			sb.append('(');
 
 			if (!in.isEmpty()) {
-				var modifiers = getAttribute(cp, Attribute.MethodParameters);
+				var modifiers = getAttribute(owner, Attribute.MethodParameters);
 				// 警告: 规范不要求注解必须按descriptor排序，编译器可以让第0个表示用户显式提供的参数，而不是标识符的第0个
 				//https://docs.oracle.com/javase/specs/jvms/se17/html/jvms-4.html#jvms-4.7.18
-				var a1 = getAttribute(cp, Attribute.InvisibleParameterAnnotations);
-				var a2 = getAttribute(cp, Attribute.VisibleParameterAnnotations);
+				var a1 = getAttribute(owner, Attribute.InvisibleParameterAnnotations);
+				var a2 = getAttribute(owner, Attribute.VisibleParameterAnnotations);
 				Code code;
 				try {
-					code = getAttribute(cp, Attribute.Code);
+					code = getAttribute(owner, Attribute.Code);
 				} catch (ClassCastException e) {
 					code = null;
 				}
@@ -233,7 +246,7 @@ public final class MethodNode extends MemberNode {
 			sb.setLength(sb.length()-1);
 		}
 
-		ClassListAttribute exceptions = getAttribute(cp, Attribute.Exceptions);
+		ClassListAttribute exceptions = getAttribute(owner, Attribute.Exceptions);
 		if (exceptions != null) {
 			sb.append(" throws ");
 			List<String> classes = exceptions.value;
@@ -245,14 +258,14 @@ public final class MethodNode extends MemberNode {
 			}
 		}
 
-		AnnotationDefault def = getAttribute(cp, Attribute.AnnotationDefault);
+		AnnotationDefault def = getAttribute(owner, Attribute.AnnotationDefault);
 		if (def != null) sb.append(" default ").append(def.val);
 
 		try {
 			if (getAttribute("Code") instanceof AttrCodeWriter cw) {
 				sb.append(" {\n").padEnd(' ', prefix+4).append("<complex ").append(cw.cw).append(">\n").padEnd(' ', prefix).append('}');
 			} else {
-				Code code = getAttribute(cp, Attribute.Code);
+				Code code = getAttribute(owner, Attribute.Code);
 				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append('}');
 				else sb.append(';');
 			}
@@ -260,18 +273,5 @@ public final class MethodNode extends MemberNode {
 			sb.append(e);
 		}
 		return sb;
-	}
-
-	public Code getCode(ConstantPool cp) {
-		AttributeList list = attributes;
-		if (list == null) return null;
-		Object code = list.getByName("Code");
-		if (code instanceof AttrCodeWriter acw) {
-			var attr = UnparsedAttribute.serialize(cp, AsmCache.buf(), acw);
-			list.add(attr);
-			code = attr;
-		}
-		if (code instanceof Code code1) return code1;
-		return getAttribute(cp, Attribute.Code);
 	}
 }

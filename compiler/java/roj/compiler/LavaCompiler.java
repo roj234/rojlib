@@ -18,7 +18,7 @@ import roj.collect.*;
 import roj.compiler.api.AStatementParser;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.Processor;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
@@ -85,7 +85,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	public ArrayList<CompileUnit> parsables = new ArrayList<>();
-	public boolean skipCodeGen;
+	public boolean structOnly;
 
 	/**
 	 * 编译输入的源文件并返回生成的类定义。
@@ -135,7 +135,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 				}
 			}
 			if (hasError()) return null;
-			if (!skipCodeGen) {
+			if (!structOnly) {
 				for (int i = 0; i < units.size(); i++) {
 					try {
 						units.get(i).S4parseCode();
@@ -225,7 +225,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			if (hasError()) return null;
 
 			prog.end("完成");
-			if (!skipCodeGen) {
+			if (!structOnly) {
 				prog.setTotal(taskSecondPass.size());
 				prog.setName("阶段4: 方法");
 
@@ -301,12 +301,11 @@ public class LavaCompiler extends Resolver implements Compiler {
 
 	public JavadocProcessor createJavadocProcessor(Javadoc javadoc, CompileUnit file) {return JavadocProcessor.NULL;}
 
-	// 在不同类型的数组上创建附加方法
 	public ClassNode resolveArray(IType type) {
 		System.out.println("resolveArray("+type+")");
 		if (true) return AnyArray;
 
-
+		// 在不同类型的数组上创建附加方法
 		String arrayTypeDesc = type.toDesc();
 		Object o = libraryByName.get(arrayTypeDesc);
 		if (o != null) return (ClassNode) o;
@@ -465,9 +464,9 @@ public class LavaCompiler extends Resolver implements Compiler {
 		}
 	}
 
-	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
+	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationBuilder> annotations) {
 		var lc = file.ctx;
-		for (AnnotationPrimer annotation : annotations) {
+		for (AnnotationBuilder annotation : annotations) {
 			for (Processor processor : processors.getOrDefault(annotation.type(), Collections.emptyList())) {
 				processor.handle(lc, file, node, annotation);
 			}
@@ -516,6 +515,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 		var tokenizer = new LavaTokenizer();
 		tokenizer.literalEnd(myLends).tokenIds(myTokens);
 		tokenizer.literalState = myLiteralStates;
+		tokenizer.udlCallbacks = udlCallbacks;
 		return tokenizer;
 	}
 
@@ -542,11 +542,29 @@ public class LavaCompiler extends Resolver implements Compiler {
 	private final Int2IntMap stateMap = ExprParser.getStateMap();
 	private final List<Object> callbacks = ArrayList.asModifiableList((Object) null);
 	private final IntMap<List<ExprOp>> operators = new IntMap<>();
+	private final TrieTree<Integer> udlCallbacks = new TrieTree<>();
 
 	private void register(int mask, String token, Object fn, int flags) {
 		int i = stateMap.putIntIfAbsent(tokenId(token) | mask, flags);
 		if (i != flags) throw new IllegalStateException("token "+token+" was occupied");
 		callbacks.add(fn);
+	}
+
+	@Override
+	public void newUDLOp(String unit, UDLOp parser) {
+		int tokenId = tokenId("\0UDL\0"+unit);
+
+		int flags = callbacks.size();
+		int i = stateMap.putIntIfAbsent(tokenId | ExprParser.SM_ExprStart, flags);
+		if (i != flags) throw new IllegalStateException("token "+unit+" was occupied");
+
+		callbacks.add((StartOp) ctx -> {
+			Token udl = ctx.tokenizer.current();
+			assert udl.type() == tokenId;
+			return parser.parse(ctx, udl);
+		});
+
+		udlCallbacks.put(IOUtil.getSharedCharBuf().append(unit).reverse().toString(), tokenId);
 	}
 
 	@Override public final void newUnaryOp(String token, ContinueOp<PrefixOperator> parser) {register(ExprParser.SM_UnaryPre, token, parser, callbacks.size());}

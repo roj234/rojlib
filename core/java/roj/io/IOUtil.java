@@ -517,16 +517,11 @@ public final class IOUtil {
 	//endregion
 	//region 文件创建、复制和删除工具
 	public static boolean isWritable(File file) {
-		boolean writable = Files.isWritable(file.toPath());
-
 		try {
 			new RandomAccessFile(file, "rw").close();
 		} catch (IOException e) {
-			assert !writable;
 			return false;
 		}
-
-		assert writable;
 		return true;
 	}
 

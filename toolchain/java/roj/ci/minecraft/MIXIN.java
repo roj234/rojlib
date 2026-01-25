@@ -6,7 +6,6 @@ import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.annotation.ArrayVal;
 import roj.asm.attr.Annotations;
-import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.type.ParameterizedType;
 import roj.asm.type.Signature;
@@ -38,7 +37,7 @@ public class MIXIN implements Plugin {
 		var annotatedClass = ctx.getAnnotatedClasses("org/spongepowered/asm/mixin/Mixin");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
-			Annotation mixin = Annotation.findInvisible(data.cp, data, "org/spongepowered/asm/mixin/Mixin");
+			Annotation mixin = Annotation.findInvisible(data, data, "org/spongepowered/asm/mixin/Mixin");
 
 			// noinspection all
 			var targetClasses = mixin.getList("value");
@@ -54,13 +53,13 @@ public class MIXIN implements Plugin {
 		for (int i = 0; i < members.size(); i++) {
 			Member member = members.get(i);
 
-			List<Annotation> annotations = Annotations.getAnnotations(mixinClass.cp, member, true);
+			List<Annotation> annotations = Annotations.getAnnotations(mixinClass, member, true);
 			for (int j = 0; j < annotations.size(); j++) {
 				Annotation anno = annotations.get(j);
 				if (anno.type().equals("org/spongepowered/asm/mixin/Shadow") || anno.type().equals("org/spongepowered/asm/mixin/Overwrite")) {
 					anno.put("remap", AnnVal.valueOf(false));
 
-					String mappedName = mapMemberName(mapper, mixinClass.cp, targetClass, member, null);
+					String mappedName = mapMemberName(mapper, mixinClass, targetClass, member, null);
 					if (mappedName != null) {
 						if (anno.type().endsWith("Shadow")) {
 							CstNameAndType desc = mixinClass.cp.getDesc(member.name(), member.rawDesc());
@@ -97,7 +96,7 @@ public class MIXIN implements Plugin {
 
 					var methods = anno.getList("method");
 					if (methods.size() <= 1) {
-						String mappedName = mapMemberName(mapper, mixinClass.cp, targetClass, member, methods.isEmpty() ? null : methods.getString(0));
+						String mappedName = mapMemberName(mapper, mixinClass, targetClass, member, methods.isEmpty() ? null : methods.getString(0));
 						if (mappedName != null) {
 							anno.put("method", new ArrayVal(Collections.singletonList(AnnVal.valueOf(mappedName))));
 						} else {
@@ -110,7 +109,7 @@ public class MIXIN implements Plugin {
 		}
 	}
 
-	private String mapMemberName(Mapper mapper, ConstantPool cp, String targetClass, Member member, String forcedName) {
+	private String mapMemberName(Mapper mapper, ClassNode cn, String targetClass, Member member, String forcedName) {
 		if (forcedName != null && forcedName.equals("/")) return member.name();
 
 		String memberDesc = member.rawDesc();
@@ -120,7 +119,7 @@ public class MIXIN implements Plugin {
 				var parameters = new ArrayList<>(mn.parameters());
 				parameters.set(parameters.size()-1, mn.returnType());
 				if (lastArg.owner().endsWith("CallbackInfoReturnable")) {
-					Signature signature = mn.getSignature(cp);
+					Signature signature = mn.getSignature(cn);
 					try {
 						Type returnType = ((ParameterizedType) signature.values.get(signature.values.size() - 2)).typeParameters.get(0).rawType();
 						parameters.set(parameters.size() - 1, returnType);

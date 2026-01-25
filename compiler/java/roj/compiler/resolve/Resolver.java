@@ -6,23 +6,21 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.*;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.InnerClasses;
-import roj.asm.type.IType;
-import roj.asm.type.ParameterizedType;
-import roj.asm.type.Signature;
-import roj.asm.type.Type;
+import roj.asm.type.*;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.*;
 import roj.compiler.CompileUnit;
 import roj.compiler.api.Types;
-import roj.compiler.asm.AnnotationPrimer;
-import roj.compiler.asm.WildcardType;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.diagnostic.Diagnostic;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.library.JarLibrary;
 import roj.compiler.library.Library;
 import roj.compiler.library.RuntimeLibrary;
+import roj.compiler.types.CompoundType;
 import roj.io.IOUtil;
 import roj.reflect.resolver.IResolver;
 import roj.text.logging.Logger;
@@ -204,14 +202,14 @@ public class Resolver implements IResolver {
 	@Nullable public final List<IType> getTypeArgumentsFor(ClassNode info, String superType) {return link(info).getTypeParamOwner(this).get(superType);}
 	@NotNull public final Map<String, InnerClasses.Item> getInnerClassInfo(ClassNode info) {return link(info).getInnerClasses(this);}
 	public final AnnotationType getAnnotationDescriptor(ClassNode info) {return link(info).annotationInfo();}
-	public final void fillAnnotationDefault(AnnotationPrimer annotation) {
+	public final void fillAnnotationDefault(AnnotationBuilder annotation) {
 		var self = getAnnotationDescriptor(resolve(annotation.type()));
 		for (var entry : self.elementDefault.entrySet()) annotation.raw().putIfAbsent(entry.getKey(), entry.getValue());
 	}
 	//endregion
 	//region 无上下文依赖的类型转换&推断
 	private static final AbstractList<IType> ANY_GENERIC_LIST = new AbstractList<>() {
-		@Override public IType get(int index) {return WildcardType.anyType;}
+		@Override public IType get(int index) {return Types.anyType;}
 		@Override public int size() {return 0;}
 	};
 	/**
@@ -263,9 +261,7 @@ public class Resolver implements IResolver {
 	 *           will typically be reported using the internal {@link #report} method.
 	 */
 	@Nullable
-	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {return inferGeneric(typeInst, targetType, null);}
-	@Nullable
-	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType, @Nullable Map<?, ?> temp) {
+	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {
 		var info = resolve(typeInst.owner());
 
 		if (targetType.equals(typeInst.owner())) {
@@ -273,8 +269,8 @@ public class Resolver implements IResolver {
 			if (!(typeInst instanceof ParameterizedType parameterizedType)) return null;
 
 			// 将<>擦除为上界
-			if (parameterizedType.typeParameters.size() == 1 && parameterizedType.typeParameters.get(0) == WildcardType.anyGeneric) {
-				return info.getAttribute(info.cp, Attribute.SIGNATURE).getBounds();
+			if (parameterizedType.typeParameters.size() == 1 && parameterizedType.typeParameters.get(0) == Types.anyGeneric) {
+				return info.getAttribute(Attribute.SIGNATURE).getBounds();
 			}
 
 			return parameterizedType.typeParameters;
@@ -286,23 +282,17 @@ public class Resolver implements IResolver {
 
 		// bounds是SimpleList$1，代表其中含有类型参数，需要动态解析
 		List<IType> children;
+
+		if (typeInst instanceof CompoundType wt) typeInst = wt.getBound();
 		if (typeInst instanceof ParameterizedType g) {
 			children = g.typeParameters;
 
-			if (g.typeParameters.size() == 1 && g.typeParameters.get(0) == WildcardType.anyGeneric) {
+			if (g.typeParameters.size() == 1 && g.typeParameters.get(0) == Types.anyGeneric) {
 				// 20250411 这里应该用目标类型……之前写错了，现在是擦除到上界，因为anyGeneric嘛
-				info = resolve(targetType);
-				var sign = info.getAttribute(info.cp, Attribute.SIGNATURE);
-
-				HashMap<String, IType> typeParameters = temp==null?new HashMap<>():Helpers.cast(temp);
-				Inferrer.substituteMissingTypeParametersToBound(sign.typeVariables, typeParameters);
-
 				bounds = new ArrayList<>(bounds);
 				for (int i = 0; i < bounds.size(); i++) {
-					bounds.set(i, Inferrer.substituteTypeVariables(bounds.get(i), typeParameters, sign.typeVariables));
+					bounds.set(i, Inferrer.substituteTypeVariables(bounds.get(i), Collections.emptyMap()));
 				}
-
-				typeParameters.clear();
 				return bounds;
 			}
 		} else {
@@ -316,22 +306,22 @@ public class Resolver implements IResolver {
 	// C <T3> extends B <String, T3>
 	// 假设我要拿A的类型，那就要先通过已知的C（params）推断B，再推断A
 	private List<IType> inferGeneric0(ClassNode typeInst, List<IType> params, String target) {
-		Map<String, IType> substitution = new HashMap<>();
+		Map<TypeVariableDeclaration, IType> substitution = new HashMap<>();
 
 		int depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
 		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name()+"<"+params+">推断"+target);
 
 		loop:
 		for(;;) {
-			var sign = typeInst.getAttribute(typeInst.cp, Attribute.SIGNATURE);
+			var sign = typeInst.getAttribute(Attribute.SIGNATURE);
 
 			int i = 0;
 			final List<IType> values = sign.values;
-			Map<String, List<IType>> typeVariables = sign.typeVariables;
+			var typeVariables = sign.typeVariables;
 
 			substitution.clear();
-			for (String name : typeVariables.keySet())
-				substitution.put(name, params.get(i++));
+			for (var decl : typeVariables)
+				substitution.put(decl, params.get(i++));
 
 			// 250915 第一个和non static generic兼容有关的更新
 			var nonStaticGenericParent = typeInst;
@@ -339,18 +329,15 @@ public class Resolver implements IResolver {
 				var item = link(nonStaticGenericParent).getInnerClasses(this).get(nonStaticGenericParent.name());
 				if (item == null || (item.modifier & Opcodes.ACC_STATIC) != 0) break;
 				nonStaticGenericParent = resolve(item.parent);
-				if (nonStaticGenericParent == null) break;
+				Signature newSign;
+				if (nonStaticGenericParent == null || (newSign = nonStaticGenericParent.getAttribute(Attribute.SIGNATURE)) == null) break;
 
-				if (typeVariables == sign.typeVariables) typeVariables = new HashMap<>(typeVariables);
+				if (typeVariables == sign.typeVariables) typeVariables = new Signature.TVDSet(typeVariables);
 
-				sign = nonStaticGenericParent.getAttribute(typeInst.cp, Attribute.SIGNATURE);
-				for (var entry : sign.typeVariables.entrySet()) {
-					String name = entry.getKey();
-
-					typeVariables.putIfAbsent(name, entry.getValue());
-					substitution.putIfAbsent(name, params.get(i++));
+				for (var decl : newSign.typeVariables) {
+					typeVariables.add(decl);
+					substitution.putIfAbsent(decl, params.get(i++));
 				}
-
 			}
 
 			// < 0 => flag[0x80000000] => 从接口的接口继承，而不是父类的接口
@@ -361,14 +348,14 @@ public class Resolver implements IResolver {
 					// rawtypes
 					if (type.kind() == IType.SIMPLE_TYPE) return Collections.emptyList();
 
-					var rubber = (ParameterizedType) Inferrer.substituteTypeVariables(type, substitution, typeVariables);
+					var rubber = (ParameterizedType) Inferrer.substituteTypeVariables(type, substitution);
 					return rubber.typeParameters;
 				}
 
 				typeInst = resolve(type.owner());
 				depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
 				if (depthInfo != -1) {
-					var rubber = (ParameterizedType) Inferrer.substituteTypeVariables(type, substitution, typeVariables);
+					var rubber = (ParameterizedType) Inferrer.substituteTypeVariables(type, substitution);
 					params = rubber.typeParameters;
 					continue loop;
 				}
@@ -439,11 +426,11 @@ public class Resolver implements IResolver {
 		if (a.equals(b)) return a;
 
 		if (a.kind() >= IType.BOUNDED_WILDCARD) {
-			a = ((WildcardType) a).getBound();
+			a = ((CompoundType) a).getBound();
 			if (a == null) return b.isPrimitive() ? Type.getWrapper(b) : b;
 		}
 		if (b.kind() >= IType.BOUNDED_WILDCARD) {
-			b = ((WildcardType) b).getBound();
+			b = ((CompoundType) b).getBound();
 			if (b == null) return a.isPrimitive() ? Type.getWrapper(a) : a;
 		}
 
@@ -462,7 +449,7 @@ public class Resolver implements IResolver {
 			// common parent of Object[][] | Object[]
 			return Math.min(a.array(), b.array()) == 0
 					? Types.OBJECT_TYPE
-					: new WildcardType(Arrays.asList(Type.klass("java/lang/Cloneable"), Type.klass("java/lang/Serializable")));
+					: CompoundType.intersection(Arrays.asList(Type.klass("java/lang/Cloneable"), Type.klass("java/lang/Serializable")));
 		}
 
 		ClassNode infoA = resolve(a.owner());
@@ -470,10 +457,28 @@ public class Resolver implements IResolver {
 		ClassNode infoB = resolve(b.owner());
 		if (infoB == null) return a; //
 
-		String commonParent = getCommonAncestor(infoA, infoB);
-		assert commonParent != null;
+		// TODO primitive generic 另外这个不是线程安全的（缓存），之后可能要把ClassUtil放进CompileContext里面
+		// 	CP(ArrayList<int>, List<Integer>) => List<Integer>
+		//  CP(List<int>, List<Integer>) => Collection<Integer>
 
-		var info = resolve(commonParent);
+		List<String> commonAncestors = typeHelper.getCommonAncestors(Collections.singletonList(a.owner()), Collections.singletonList(b.owner()));
+		if (commonAncestors.size() == 1) {
+			return resolveSingleAncestor(a, b, commonAncestors.get(0), infoA, infoB);
+		}
+
+		List<IType> bounds = new ArrayList<>(commonAncestors.size());
+		for (int i = 0; i < commonAncestors.size(); i++) {
+			IType type = resolveSingleAncestor(a, b, commonAncestors.get(i), infoA, infoB);
+			if (type == Signature.unboundedWildcard()) return type;
+
+			bounds.add(type);
+		}
+
+		return CompoundType.intersection(bounds);
+	}
+
+	private IType resolveSingleAncestor(IType a, IType b, String ancestor, ClassNode infoA, ClassNode infoB) {
+		var info = resolve(ancestor);
 
 		int extendType = a instanceof ParameterizedType ga ? ga.wildcard : ParameterizedType.NO_WILDCARD;
 		int extendType2 = b instanceof ParameterizedType gb ? gb.wildcard : ParameterizedType.NO_WILDCARD;
@@ -484,19 +489,19 @@ public class Resolver implements IResolver {
 			// LCA(T, ? extends T) = ? extends T
 			// LCA(T, ? super T) = ?
 			// LCA(? extends, ? super T) = ?
-			if (hasSuper) return Signature.unboundedWildcard(); // 通配符类型
+			if (hasSuper) return Signature.unboundedWildcard();
 			if (hasExtends) extendType = ParameterizedType.EXTENDS_WILDCARD;
 		}
 
-		List<IType> aGeneric = inferGeneric(a, commonParent);
-		List<IType> bGeneric = inferGeneric(b, commonParent);
+		List<IType> aGeneric = inferGeneric(a, ancestor);
+		List<IType> bGeneric = inferGeneric(b, ancestor);
 
 		// 如果不是泛型类，那么直接返回
 		if (extendType == ParameterizedType.NO_WILDCARD && (aGeneric == null || bGeneric == null)) {
 			// 少创建对象
 			if (info == infoA) return a;
 			if (info == infoB) return b;
-			return Type.klass(commonParent, a.array());
+			return Type.klass(ancestor, a.array());
 		}
 
 		// 否则进行泛型推断
@@ -516,18 +521,16 @@ public class Resolver implements IResolver {
 			typeParams.set(i, c);
 		}
 
-		// TODO primitive generic
-		// 	CP(ArrayList<int>, List<Integer>) => List<Integer>
-		//  CP(List<int>, List<Integer>) => Collection<Integer>
-
-		ParameterizedType parameterizedType = new ParameterizedType(commonParent, a.array(), extendType);
+		ParameterizedType parameterizedType = new ParameterizedType(ancestor, a.array(), extendType);
 		parameterizedType.typeParameters = typeParams;
 		return parameterizedType;
 	}
+
+	private final ClassUtil typeHelper = new ClassUtil(this);
 	/**
 	 * 返回ab两个类(Class)的共同祖先
 	 */
-	public final String getCommonAncestor(ClassNode infoA, ClassNode infoB) {
+	private String getCommonAncestor(ClassNode infoA, ClassNode infoB) {
 		ToIntMap<String> tmp,
 				listA = getHierarchyList(infoA),
 				listB = getHierarchyList(infoB);
@@ -564,8 +567,8 @@ public class Resolver implements IResolver {
 		return isError;
 	}
 
-	public void report(ClassDefinition source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
-	public void report(ClassDefinition source, Kind kind, int pos, String code, Object... args) {report(new Diagnostic(source, kind, pos, pos, code, args));}
+	public void report(ClassDefinition source, Kind kind, int pos, String code) { report(source, kind, pos, code, IText.translatable(code));}
+	public void report(ClassDefinition source, Kind kind, int pos, String code, Object... arguments) {report(new Diagnostic(source, kind, pos, pos, code, IText.translatable(code, arguments)));}
 	//endregion
 
 	public List<CompileUnit> getDirectInheritorFor(String name) {

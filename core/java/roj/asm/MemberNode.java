@@ -22,12 +22,12 @@ public abstract class MemberNode implements Member {
 			ACC_TRANSIENT | ACC_VOLATILE)
 	public char modifier;
 	Object name, desc;
-	public AttributeList attributes;
+	AttributeList attributes;
 
 	/**
 	 * @return this
 	 */
-	public abstract MemberNode parsed(ConstantPool cp);
+	public abstract MemberNode parsed(ClassNode owner);
 	public final void unparsed(ConstantPool cp) {
 		if (attributes == null) return;
 

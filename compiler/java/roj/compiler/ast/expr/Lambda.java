@@ -13,13 +13,14 @@ import roj.compiler.LavaTokenizer;
 import roj.compiler.api.Compiler;
 import roj.compiler.asm.LambdaCall;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.types.LambdaForm;
 import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -34,46 +35,12 @@ import java.util.List;
  * @since 2024/1/23 11:32
  */
 public final class Lambda extends Expr {
-	public static final int ARGC_UNKNOWN = 0x10000;
-	public static final IType ARGC_UNKNOWN_TYPE = untypedLambda(ARGC_UNKNOWN);
-
-	private static final WildcardType[] untypedLambda = new WildcardType[10];
-	static {
-		for (int i = 0; i < 10; i++) untypedLambda[i] = untypedLambda(i);
-	}
-	public static int getLambdaArgc(IType lambdaType) {
-		String name;
-		if (lambdaType.kind() != IType.BOUNDED_WILDCARD || !(name = lambdaType.toString()).startsWith("lambda.arg:[")) return -1;
-		return name.length() == 14 ? name.charAt(12) - '0' : Integer.parseInt(name.substring(12, name.length()-1));
-	}
-	public static List<IType> getLambdaArgs(IType lambdaType) {
-		return ((WildcardType) lambdaType).getTraits();
-	}
-
-	/**
-	 * lambda类型不是给TypeCast用的！
-	 * @see roj.compiler.resolve.Inferrer#cast(IType, IType)
-	 */
-	public static WildcardType typedLambda(List<IType> arguments) {return new WildcardType("lambda.arg:["+arguments.size()+"]", arguments);}
-	public static WildcardType untypedLambda(int argc) {return new WildcardType("lambda.arg:["+argc+"]", null);}
-	public static IType typeOf(List<VariableDeclare> args) {
-		var argc = args.size();
-		if (argc == 0) return untypedLambda[0];
-
-		var untyped = args.get(0).type == null;
-		if (untyped) return argc < 10 ? untypedLambda[argc] : untypedLambda(argc);
-
-		return typedLambda(Flow.of(args).map(vd -> vd.type).toList());
-	}
-
 	private List<VariableDeclare> args;
 	private MethodNode impl;
 	private ParseTask task;
 
 	private Expr methodRef;
 	private String methodName;
-
-	public MethodNode getImpl() {return impl;}
 
 	// args -> {...}
 	public Lambda(List<VariableDeclare> args, MethodNode impl, ParseTask task) {
@@ -89,6 +56,7 @@ public final class Lambda extends Expr {
 	}
 
 	public Expr getMethodRef() {return methodRef;}
+	public MethodNode getImpl() {return impl;}
 
 	@Override
 	public String toString() {return methodRef == null
@@ -99,9 +67,7 @@ public final class Lambda extends Expr {
 
 	@Override
 	public IType type() {
-		return methodRef != null && args == Collections.EMPTY_LIST
-				? ARGC_UNKNOWN_TYPE
-				: typeOf(Helpers.cast(args));
+		return methodRef != null && args == Collections.EMPTY_LIST ? LambdaForm.ARGC_UNKNOWN_TYPE : LambdaForm.of(Helpers.cast(args));
 	}
 	@Override
 	public Expr resolve(CompileContext ctx) throws ResolveException {
@@ -139,12 +105,12 @@ public final class Lambda extends Expr {
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		var ctx = CompileContext.get();
-		if (cast.getType1() == null) {
-			ctx.report(this, Kind.ERROR, "lambda.untyped");
+		if (cast.getTarget() == null) {
+			ctx.report(this, Kind.ERROR, "type.cannotInfer", IText.translatable("type.lambda"));
 			return;
 		}
 
-		IType lambda目标类型 = cast.getType1();
+		IType lambda目标类型 = cast.getTarget();
 		var lambda接口 = ctx.compiler.resolve(lambda目标类型.owner());
 
 		var resolveHelper = ctx.compiler.link(lambda接口);
@@ -165,7 +131,7 @@ public final class Lambda extends Expr {
 			case 2 -> generator = LambdaCall.ANONYMOUS_CLASS;
 		}
 
-		var lambda实参 = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, lambda目标类型).rawDesc();
+		var lambda实参 = ctx.inferrer.getSubstitutedParameters(lambda接口, lambda方法, lambda目标类型).rawDesc();
 
 		var lambda入参 = new ArrayList<Type>();
 		List<Expr> lambda入参的取值表达式;

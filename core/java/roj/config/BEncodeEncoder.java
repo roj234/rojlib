@@ -24,7 +24,7 @@ public final class BEncodeEncoder implements ValueEmitter {
 	public final void emit(double i) {throw new UnsupportedOperationException("BEncode不支持浮点数");}
 	public final void emit(String s) {out.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(s))).put(':').putUTFData(s);}
 	public final void emitNull() {throw new UnsupportedOperationException("BEncode不支持null");}
-	public final boolean supportArray() {return true;}
+	public final boolean allowArray() {return true;}
 	public final void emit(byte[] array) {out.putAscii(Integer.toString(array.length)).put(':').put(array);}
 
 	// *no state check*

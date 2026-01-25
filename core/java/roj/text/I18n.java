@@ -41,62 +41,38 @@ public class I18n {
 		String v = langMap.get(str);
 		if (v != null) return v;
 
-		CharList out = new CharList();
-		loopTranslate(str, out, 0, true);
-		return out.toStringAndFree();
-	}
-	private int loopTranslate(String str, CharList out, int ptr, boolean top) {
-		int nextStart;
-		if (top) {
-			nextStart = 0;
-		} else {
-			nextStart = str.indexOf('\1', ptr);
-			if (nextStart < 0) {
-				out.append(str, ptr, str.length());
-				return str.length();
+		int i = str.indexOf(":[");
+		if (i >= 0) {
+			v = langMap.get(str.substring(0, i));
+			if (v != null) {
+				i += 2;
+				CharList buf = new CharList(v);
+				int idx = 0;
+
+				char c;
+				while (i < str.length() && (c = str.charAt(i)) != ']') {
+					String key;
+					if (c == '"') {
+						int j = str.indexOf('"', ++i);
+						key = str.substring(i, j);
+						i = j + 1;
+					} else {
+						int j = str.indexOf(',', i);
+						if (j < 0) j = str.length()-1;
+						key = str.substring(i, j);
+						key = langMap.getOrDefault(key, key);
+						i = j + 1;
+					}
+
+					String placeholder = "%"+ ++ idx;
+					int pos = buf.indexOf(placeholder);
+					if (pos < 0) buf.append(key);
+					else buf.replace(pos, pos + placeholder.length(), key);
+				}
+
+				return buf.toStringAndFree();
 			}
-
-			out.append(str, ptr, nextStart);
-			ptr = nextStart+1;
 		}
-
-		int i = str.indexOf('\1', nextStart+1);
-		if (i < 0 && top) {out.append(str);return str.length();}
-
-		int nextEnd = top ? i : str.indexOf('\0', nextStart+1);
-		if (i < nextEnd && i > nextStart) {
-			ptr = loopTranslate(str, out, ptr, false);
-			nextEnd = str.indexOf('\0', ptr);
-		}
-		if (nextEnd < 0) throw new IllegalStateException("i18nError "+str.replace('\1', '{').replace('\0', '}')+" 未闭合的括号，开始于"+nextStart);
-
-		String content = str.substring(ptr, nextEnd);
-		String translate = langMap.get(content);
-
-		ptr = nextEnd;
-		if (translate == null) {out.append(content);return ptr;}
-		if (!translate.contains("%1")) {out.append(translate);return ptr;}
-
-		var translateTmp = new CharList(translate);
-		var tmp2 = new CharList();
-		int num = 0;
-		while (ptr < str.length()) {
-			String key = "%" + ++num;
-			int j = translateTmp.indexOf(key);
-			if (j < 0) break;
-
-			ptr = loopTranslate(str, tmp2, ptr, false);
-			translateTmp.replace(key, tmp2);
-			tmp2.clear();
-		}
-		tmp2._free();
-		out.append(translateTmp);
-		translateTmp._free();
-
-		while (ptr < str.length()) {
-			ptr = loopTranslate(str, out, ptr, false);
-		}
-
-		return ptr+1;
+		return str;
 	}
 }

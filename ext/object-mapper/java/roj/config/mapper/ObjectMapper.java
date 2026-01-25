@@ -30,6 +30,7 @@ import java.io.OutputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -276,9 +277,9 @@ public abstract class ObjectMapper {
 	public final <T> ObjectWriter<Map<String, T>> mapWriter(Class<T> content) { return (ObjectWriter<Map<String, T>>) writer(Signature.parseGeneric("Ljava/util/Map<Ljava/lang/String;"+TypeHelper.class2asm(content)+">;")); }
 
 	public final <T> T read(ConfigValue in, Class<T> type) {return reader(type).read(in);}
-	public final <T> T read(File in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType);}
-	public final <T> T read(DynByteBuf in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType);}
-	public final <T> T read(InputStream in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType);}
+	public final <T> T read(File in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType, StandardCharsets.UTF_8);}
+	public final <T> T read(DynByteBuf in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType, StandardCharsets.UTF_8);}
+	public final <T> T read(InputStream in, Class<T> type, ConfigMaster configType) throws IOException, ParseException {return reader(type).read(in, configType, StandardCharsets.UTF_8);}
 	public final <T> T read(CharSequence in, Class<T> type, ConfigMaster configType) throws ParseException {return reader(type).read(in, configType);}
 
 	public final void write(ValueEmitter emitter, Object object) {

@@ -34,7 +34,7 @@ public interface Attributed {
 		list.add(out);
 		return out;
 	}
-	default <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {throw new UnsupportedOperationException("未实现");}
+	default <T extends Attribute> T getAttribute(@Nullable ClassNode owner, TypedKey<T> type) {throw new UnsupportedOperationException("未实现");}
 	default void addAttribute(Attribute attr) {attributes().add(attr);}
 
 	default AttributeList attributes() {throw new UnsupportedOperationException(getClass().getName());}

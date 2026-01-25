@@ -46,8 +46,7 @@ public class JNIHeadersPlugin implements Processor {
 	}
 
 	public static void writeJNIHeaders(LavaCompiler ctx, List<ClassNode> classes) {
-		var cast = new TypeCast();
-		cast.context = ctx;
+		var cast = new TypeCast(ctx);
 
 		CharList h = ((Compiler) ctx).attachment(sbType);
 

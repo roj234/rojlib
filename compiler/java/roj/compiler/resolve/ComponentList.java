@@ -8,6 +8,7 @@ import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 
 import java.util.Collections;
@@ -42,10 +43,10 @@ public abstract class ComponentList {
 
 	static void checkDeprecation(CompileContext ctx, ClassNode owner, Member member) {
 		if (owner.getAttribute("Deprecated") != null) {
-			ctx.report(Kind.WARNING, "annotation.deprecated", "symbol.type", owner);
+			ctx.report(Kind.WARNING, "annotation.deprecated", IText.translatable("symbol.type"), owner);
 		}
 		if (member.getAttribute("Deprecated") != null) {
-			ctx.report(Kind.WARNING, "annotation.deprecated", member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field", member);
+			ctx.report(Kind.WARNING, "annotation.deprecated", IText.translatable(member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field"), member);
 		}
 	}
 }

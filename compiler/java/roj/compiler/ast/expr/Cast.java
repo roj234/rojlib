@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
 import roj.compiler.LavaTokenizer;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
@@ -55,14 +55,14 @@ final class Cast extends PrefixOp {
 			if (this.cast.isIdentity()) {
 				ctx.report(this, Kind.WARNING, "cast.redundant", type);
 			}
-			return constant(type, AnnotationPrimer.castPrimitive((ConfigValue) right.constVal(), type));
+			return constant(type, AnnotationBuilder.coerceConstantValue((ConfigValue) right.constVal(), type));
 		}
 		return this;
 	}
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		if (cast.isIdentity() && this.cast.isIdentity()) {
+		if (cast.isIdentity() && this.cast.isIdentity() && type.equals(right.type())) {
 			cw.ctx.report(this, Kind.WARNING, "cast.redundant", type);
 		}
 

@@ -15,11 +15,11 @@ import static roj.asm.Opcodes.NOP;
  * @author Roj234
  * @since 2022/2/5 12:22
  */
-final class LazyLoadStore extends Segment {
+final class VariableAccess extends Segment {
 	private final Variable v;
 	private final boolean store;
 
-	public LazyLoadStore(Variable v, boolean store) {
+	public VariableAccess(Variable v, boolean store) {
 		this.v = v;
 		this.store = store;
 	}
@@ -36,7 +36,7 @@ final class LazyLoadStore extends Segment {
 			} else {
 				// Store n, Load n 消除
 				List<Segment> segments = ((MethodWriter) to).getSegments();
-				if (segments.get(segmentId-1) instanceof LazyLoadStore prev && prev.store && prev.v == v) {
+				if (segments.get(segmentId-1) instanceof VariableAccess prev && prev.store && prev.v == v) {
 					segments.set(segmentId-1, StaticSegment.EMPTY);
 					segments.set(segmentId, StaticSegment.EMPTY);
 					return true;
@@ -46,13 +46,12 @@ final class LazyLoadStore extends Segment {
 				LavaCompiler.debugLogger().error("标记为未使用的变量进行了Load操作，内部错误: {}", v);
 			}
 		} else {
-			// Note: 如果以后StreamChain要改的话，这里要和Type.DirtyHacker一起改
 			byte code = v.type.rawType().getOpcode(ILOAD);
 
 			if (store) {
 				// Load n, Store n 消除
 				List<Segment> segments = ((MethodWriter) to).getSegments();
-				if (segments.get(segmentId-1) instanceof LazyLoadStore prev && !prev.store && prev.v.slot == v.slot) {
+				if (segments.get(segmentId-1) instanceof VariableAccess prev && !prev.store && prev.v.slot == v.slot) {
 					segments.set(segmentId-1, StaticSegment.EMPTY);
 					segments.set(segmentId, StaticSegment.EMPTY);
 					return true;

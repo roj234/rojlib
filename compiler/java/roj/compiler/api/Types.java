@@ -1,6 +1,8 @@
 package roj.compiler.api;
 
+import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.types.VirtualType;
 
 /**
  * @author Roj234
@@ -18,4 +20,8 @@ public interface Types {
 	Type AUTOCLOSEABLE_TYPE = Type.klass("java/lang/AutoCloseable");
 	Type ERROR = Type.klass("java/lang/Error");
 	String LOCK_TYPE = "java/util/concurrent/locks/Lock";
+
+	// 尽管AnyGeneric有专门的检测，AnyType是没有的
+	IType anyType = VirtualType.anyType("<AnyType>");
+	IType anyGeneric = VirtualType.anyType("<AnyGeneric>");
 }

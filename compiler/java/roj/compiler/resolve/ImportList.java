@@ -126,8 +126,10 @@ public final class ImportList {
 			if (info == null) {
 				itr.remove();
 				ctx.reportNoSuchType(Kind.ERROR, name);
+			} else {
+				ctx.canAccessType(info, true);
+				entry.setValue(info);
 			}
-			else entry.setValue(info);
 		}
 
 		for (var itr = importStatic.entrySet().iterator(); itr.hasNext(); ) {
@@ -149,6 +151,7 @@ public final class ImportList {
 				itr.remove();
 				ctx.reportNoSuchType(Kind.ERROR, name);
 			} else {
+				//ctx.canAccessSymbol(info, info.fields.get(info.getField(thatName)), true, true);
 				entry.setValue(CompileContext.Import.staticCall(info, thatName));
 			}
 		}

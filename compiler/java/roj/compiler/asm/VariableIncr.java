@@ -8,11 +8,11 @@ import roj.util.DynByteBuf;
  * @author Roj234
  * @since 2022/2/5 12:22
  */
-final class LazyIINC extends Segment {
+final class VariableIncr extends Segment {
 	private final Variable v;
 	private final short amount;
 
-	public LazyIINC(Variable v, int amount) {
+	public VariableIncr(Variable v, int amount) {
 		this.v = v;
 		this.amount = (short) amount;
 	}

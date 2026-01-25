@@ -44,10 +44,10 @@ public class JBAnnotations implements Plugin {
 		// 另外还可以搞MagicConstants，但Retention=SOURCE
 		if (returnEnable) {
 			ctx.classNodeEvents().annotatedMethod("org/jetbrains/annotations/NotNull", (ClassNode context, MethodNode method) -> {
-				Code code = method.getCode(context.cp);
+				Code code = method.getCode(context);
 				if (code == null) return false;
 
-				var attribute = method.getAttribute(context.cp, Attribute.InvisibleAnnotations);
+				var attribute = method.getAttribute(context, Attribute.InvisibleAnnotations);
 				Annotation notNull = Objects.requireNonNull(Annotation.find(attribute.annotations, "org/jetbrains/annotations/NotNull"));
 				if (!notNull.getBool("enforce", returnDefaultEnforce)) return false;
 
@@ -71,10 +71,10 @@ public class JBAnnotations implements Plugin {
 				return true;
 			});
 			ctx.classNodeEvents().annotatedMethod("org/jetbrains/annotations/Range", (ClassNode context, MethodNode method) -> {
-				Code code = method.getCode(context.cp);
+				Code code = method.getCode(context);
 				if (code == null) return false;
 
-				var attribute = method.getAttribute(context.cp, Attribute.InvisibleAnnotations);
+				var attribute = method.getAttribute(context, Attribute.InvisibleAnnotations);
 				Annotation range = Annotation.poll(attribute.annotations, "org/jetbrains/annotations/Range");
 				if (range == null || !range.getBool("enforce", returnDefaultEnforce)) return false;
 
@@ -111,11 +111,11 @@ public class JBAnnotations implements Plugin {
 		}
 		if (parameterEnable) {
 			ctx.classNodeEvents().annotatedParameter("org/jetbrains/annotations/NotNull", (ClassNode context, MethodNode method) -> {
-				Code code = method.getCode(context.cp);
+				Code code = method.getCode(context);
 				if (code == null) return false;
 
-				var attribute = method.getAttribute(context.cp, Attribute.InvisibleParameterAnnotations);
-				var mp = method.getAttribute(context.cp, Attribute.MethodParameters);
+				var attribute = method.getAttribute(context, Attribute.InvisibleParameterAnnotations);
+				var mp = method.getAttribute(context, Attribute.MethodParameters);
 
 				InsnList preInsert = new InsnList();
 
@@ -141,11 +141,11 @@ public class JBAnnotations implements Plugin {
 				return true;
 			});
 			ctx.classNodeEvents().annotatedParameter("org/jetbrains/annotations/Range", (ClassNode context, MethodNode method) -> {
-				Code code = method.getCode(context.cp);
+				Code code = method.getCode(context);
 				if (code == null) return false;
 
-				var attribute = method.getAttribute(context.cp, Attribute.InvisibleParameterAnnotations);
-				var mp = method.getAttribute(context.cp, Attribute.MethodParameters);
+				var attribute = method.getAttribute(context, Attribute.InvisibleParameterAnnotations);
+				var mp = method.getAttribute(context, Attribute.MethodParameters);
 
 				InsnList preInsert = new InsnList();
 

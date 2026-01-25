@@ -59,7 +59,7 @@ final class ClassMerger {
 				baseMethods.set(j, detectPriority(base, baseMethods.get(j), extra, sm));
 			} else {
 				mergedMethod++;
-				baseMethods.add(sm.parsed(extra.cp));
+				baseMethods.add(sm.parsed(extra));
 			}
 		}
 
@@ -75,7 +75,7 @@ final class ClassMerger {
 				}
 			}
 			mergedField++;
-			base.fields.add(fs.parsed(extra.cp));
+			base.fields.add(fs.parsed(extra));
 		}
 
 		processInnerClasses(base, extra);
@@ -86,8 +86,8 @@ final class ClassMerger {
 		if (extraMethod.getAttribute("Code") == null) return baseMethod;
 		if (baseMethod.getAttribute("Code") == null) return extraMethod;
 
-		var baseCode = baseMethod.getAttribute(base.cp, Attribute.Code);
-		var extraCode = extraMethod.getAttribute(extra.cp, Attribute.Code);
+		var baseCode = baseMethod.getAttribute(base, Attribute.Code);
+		var extraCode = extraMethod.getAttribute(extra, Attribute.Code);
 
 		if (baseCode.instructions.length() != extraCode.instructions.length()) {
 			replaceMethod++;

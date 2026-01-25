@@ -5,16 +5,15 @@ import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
 import roj.collect.ArrayList;
-import roj.collect.HashMap;
-import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.compiler.LavaCompiler;
-import roj.compiler.asm.WildcardType;
+import roj.compiler.api.Types;
+import roj.compiler.types.CompoundType;
+import roj.compiler.types.VirtualType;
 import roj.text.CharList;
 import roj.util.OperationDone;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 import static roj.asm.type.ParameterizedType.*;
@@ -40,7 +39,9 @@ public class TypeCast {
 
 	private static final int DISTANCE_BOXING = 1;
 
-	public static final class Cast {
+	public TypeCast(Resolver context) {this.context = context;}
+
+	public static class Cast {
 		public int type;
 		public int distance;
 
@@ -48,18 +49,19 @@ public class TypeCast {
 
 		public byte box;
 		byte op1, op2;
-		IType type1;
+		IType target;
+		boolean doCast;
 
-		Cast(int t, int d) { type = t; distance = d; }
+		protected Cast(int t, int d) { type = t; distance = d; }
 
 		//对于仅仅write的实例，节约空间
 		public Cast intern() {return isNoop() ? IDENTITY : this;}
 
 		// identity
 		public boolean isIdentity() { return (type == UPCAST || type == DOWNCAST) && op1 == op2; }
-		public boolean isNoop() { return (type == UPCAST || type == DOWNCAST) && type1 == null && op1 == op2; }
+		public boolean isNoop() { return (type == UPCAST || type == DOWNCAST) && target == null && op1 == op2; }
 
-		public IType getType1() { return type1; }
+		public IType getTarget() { return target; }
 		public byte getOp1() { return op1; }
 		public byte getOp2() { return op2; }
 
@@ -111,31 +113,34 @@ public class TypeCast {
 		}
 
 		private void cast(CodeWriter cw) {
-			if (type1 != null && op1 == 0) cw.clazz(Opcodes.CHECKCAST, type1.rawType().getActualClass());
+			if (target != null && doCast) cw.clazz(Opcodes.CHECKCAST, target.rawType().getActualClass());
 		}
 
-		public boolean canCast() {return type > TO_PRIMITIVE;}
+		Cast implicitCastTo(IType to) {
+			target = to;
+			doCast = true;
+			return this;
+		}
 
-		Cast setAnyCast(IType to) {
-			type1 = to;
+		Cast withType(IType type) {
+			if (target == null)
+				target = type;
 			return this;
 		}
 	}
 
 	// region 'macro'
 	public static Cast RESULT(int type, int distance) { return new Cast(type, distance); }
-	public static Cast ANYCAST(int type, IType to) { return new Cast(type, 0).setAnyCast(to); }
-	private static final Cast[] SOLID = new Cast[6];
+	public static Cast IMPLICIT(int type, IType to) { return new Cast(type, 0).implicitCastTo(to); }
+	private static final Cast[] ERR = new Cast[6];
 	static {
 		for (int i = IMPOSSIBLE; i <= DOWNCAST; i++) {
-			SOLID[i- IMPOSSIBLE] = new Cast(i, -1); // -1 : not applicable
+			ERR[i-IMPOSSIBLE] = new Cast(i, -1); // -1 : not applicable
 		}
 	}
-	public static Cast ERROR(@Range(from = IMPOSSIBLE, to = DOWNCAST) int type) { return SOLID[type-IMPOSSIBLE]; }
-	private static Cast DOWNCAST(IType type) {
-		Cast cast = new Cast(DOWNCAST, -1);
-		cast.type1 = type;
-		return cast; }
+	public static Cast ERROR(@Range(from = IMPOSSIBLE, to = DOWNCAST) int type) { return ERR[type-IMPOSSIBLE]; }
+	//public static Cast IMPOSSIBLE(String reason) { return new Cast(IMPOSSIBLE, -1).withReason(reason); }
+	private static Cast DOWNCAST(IType type) { return new Cast(DOWNCAST, -1).implicitCastTo(type); }
 	private static Cast NUMBER(int type, int distance, int op1) {
 		Cast cast = new Cast(type, distance);
 		cast.op1 = (byte) op1;
@@ -147,149 +152,180 @@ public class TypeCast {
 		return cast; }
 	// endregion
 
-	public Resolver context;
-	public Map<String, List<IType>> typeParams = Collections.emptyMap();
-	// only used in resolveType
-	public Map<String, List<IType>> typeParamsForTargetType;
+	public final Resolver context;
+	public Map<TypeVariableDeclaration, IType> genericContext = Collections.emptyMap();
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
-	private Cast checkCast(IType from, IType to, int etype) {
-		if (from.equals(to)) return RESULT(UPCAST, 0);
+	private Cast checkCast(IType from, IType to, int targetWildcardType) {
+		if (from.equals(to)) return RESULT(UPCAST, 0).withType(to);
+
+		int flags = 0;
+
+		switch (from.kind()) {
+			default -> throw OperationDone.NEVER;
+			case SIMPLE_TYPE -> {}
+			case PARAMETERIZED_TYPE -> {
+				ParameterizedType fromPT = (ParameterizedType) from;
+				from = fromPT.sub != null ? mergeSubClass(fromPT) : fromPT;
+				flags |= 1;
+
+				var tps = fromPT.typeParameters;
+				if (tps.size() == 1 && tps.get(0) == Types.anyGeneric) flags |= 256;
+			}
+			case TYPE_VARIABLE -> {
+				TypeVariable tvFrom = (TypeVariable) from;
+
+				// or 999 ?
+				if (to.equals(Types.OBJECT_TYPE)) return RESULT(UPCAST, tvFrom.array() + 1);
+
+				for (IType bound : tvFrom.getDeclaration()) {
+					// T extends Number -> T[] => Number[]
+					IType copyFrom = bound;
+
+					if (tvFrom.array() != 0) {
+						copyFrom = copyFrom.clone();
+						copyFrom.setArrayDim(copyFrom.array() + tvFrom.array());
+					}
+
+					Cast c = checkCast(copyFrom, to, targetWildcardType);
+					if (c.type >= 0) return c;
+				}
+
+				return DOWNCAST(to);
+			}
+			case UNBOUNDED_WILDCARD -> {return DOWNCAST(to);}
+			// 泛型 (raw + visual)
+			case CAPTURED_WILDCARD -> {
+				var wc = (CompoundType) from;
+				// 取代后的显示类型
+				IType visualType = wc.getBound();
+				// 类型参数上界
+				IType rawType = wc.getTraits().get(0);
+
+				var cast = checkCast(visualType, to, targetWildcardType);
+				// 如果不需要checkcast指令
+				if (cast.type >= DOWNCAST && checkCast(rawType.rawType(), to, targetWildcardType).type >= 0) {
+					return cast;
+				}
+				return cast.implicitCastTo(visualType);
+			}
+			case IDENTITY_TYPE -> {return ((VirtualType) from).castTo(to);}
+			case ANY_TYPE -> {
+				// diamond operator or <nullType>
+				// 这些容器提供任何类型 (基本类型除外？)
+				if (to.isPrimitive()) return ERROR(TO_PRIMITIVE);
+				return RESULT(UPCAST, 0).implicitCastTo(to);
+			}
+			// intersection
+			case BOUNDED_WILDCARD -> {
+				var wc = (CompoundType) from;
+
+				Cast r = null;
+				var bounds = wc.getTraits();
+				for (int i = 0; i < bounds.size(); i++) {
+					r = checkCast(bounds.get(i), to, SUPER_WILDCARD);
+					if (r.type >= 0) return r;
+				}
+
+				return r;
+			}
+			// union
+			case UNION_TYPE -> {
+				for (IType bound : ((CompoundType) from).getTraits()) {
+					Cast cast = checkCast(bound, to, targetWildcardType);
+					if (cast.type >= 0) return DOWNCAST(to);
+				}
+				return ERROR(IMPOSSIBLE);
+			}
+		}
 
 		switch (to.kind()) {
 			default -> throw OperationDone.NEVER;
 			case SIMPLE_TYPE -> {}
 			case PARAMETERIZED_TYPE -> {
-				ParameterizedType gg = (ParameterizedType) to;
-				to = gg.sub != null ? mergeSubClass(gg) : gg;
+				ParameterizedType toPT = (ParameterizedType) to;
+				to = toPT.sub != null ? mergeSubClass(toPT) : toPT;
+				targetWildcardType = toPT.wildcard;
+				flags |= 2;
 			}
-			case TYPE_VARIABLE -> to = getTypeParamBound(to, typeParamsForTargetType != null ? typeParamsForTargetType : typeParams);
-			case UNBOUNDED_WILDCARD -> {
-				return RESULT(UPCAST, 0); // *
+			case TYPE_VARIABLE -> {
+				// 这个口子只能在方法推断里开，其他时候不允许（吗？我并不是很确定）
+				if (genericContext == null) return DOWNCAST(to);
+				byte wildcard = ((TypeVariable) to).wildcard;
+				return checkCast(from, Inferrer.substituteTypeVariables(to, genericContext), wildcard);
 			}
-			// 不能从"某个"具体的类转到"任何"具体的类, 除非它也是Asterisk类型
+			case UNBOUNDED_WILDCARD -> {return RESULT(UPCAST, 0);}
+			case CAPTURED_WILDCARD -> to = ((CompoundType) to).getBound();
+			case IDENTITY_TYPE -> {return ((VirtualType) to).castFrom(from);}
+			case ANY_TYPE -> {
+				if (from.isPrimitive()) {
+					LavaCompiler.debugLogger().debug("E_INT_OBJ, {}, {}", from, to);
+					//return ERROR(E_INT2OBJ);
+				}
+				return RESULT(UPCAST, 0).implicitCastTo(from);
+			}
 			case BOUNDED_WILDCARD -> {
-				IType bound = ((WildcardType) to).getBound();
-				if (bound == null) {
-					if (from.isPrimitive()) {
-						LavaCompiler.debugLogger().debug("E_INT_OBJ, {}, {}", from, to);
-						//return ERROR(E_INT2OBJ);
-					}
-					return RESULT(UPCAST, 0).setAnyCast(from);
-				}
-			}
-			case CAPTURED_WILDCARD -> to = ((WildcardType) to).getBound();
-			case UNION_TYPE -> {
-				for (IType bound : ((WildcardType) to).getTraits()) {
-					Cast cast = checkCast(from, bound);
-					if (cast.type >= 0) return cast;
-				}
-				return ERROR(IMPOSSIBLE);
-			}
-		}
+				var wc = (CompoundType) to;
+				var bounds = wc.getTraits();
 
-		WildcardType wildcard = null;
-		switch (from.kind()) {
-			default -> throw OperationDone.NEVER;
-			case SIMPLE_TYPE -> {}
-			case PARAMETERIZED_TYPE -> {
-				ParameterizedType gg = (ParameterizedType) from;
-				from = gg.sub != null ? mergeSubClass(gg) : gg;
-			}
-			case TYPE_VARIABLE -> from = getTypeParamBound(from, typeParams);
-			case UNBOUNDED_WILDCARD -> {return DOWNCAST(to);}
-			case BOUNDED_WILDCARD -> {
-				wildcard = (WildcardType) from;
-				if (wildcard.getBound() == null) {
-					if (to.isPrimitive()) return ERROR(TO_PRIMITIVE);
-					return RESULT(UPCAST, 0).setAnyCast(to);
-				}
-				from = to;
-				to = wildcard.getBound();
-				to = getTypeParamBound(to, typeParams);
-			}
-			case CAPTURED_WILDCARD -> {
-				wildcard = (WildcardType) from;
-				from = wildcard.getBound();
-			}
-			case UNION_TYPE -> {
-				for (IType bound : ((WildcardType) from).getTraits()) {
-					Cast cast = checkCast(bound, to);
-					if (cast.type >= 0) return cast;
-				}
-				return ERROR(IMPOSSIBLE);
-			}
-		}
+				Cast result = checkCast(from, bounds.get(0), targetWildcardType);
+				if (result.type != UPCAST && result.type != DOWNCAST) return result;
 
-		Cast result = genericCast(from, to, etype);
-
-		if (wildcard != null) {
-			List<IType> bounds = wildcard.getTraits();
-			if (wildcard.kind() == CAPTURED_WILDCARD) {
-				var cast = genericCast(bounds.get(0), to, etype);
-				// direct cast
-				if (cast.type >= 0) {
-					cast.distance = result.distance;
-					return cast;
-				}
-				result.type1 = wildcard.getBound();
-			} else {
+				// 交集类型，from必须能转换到所有的边界，不过第0个已经在genericCast中检查了
 				for (int i = 1; i < bounds.size(); i++) {
-					Cast r = genericCast(from, bounds.get(i), etype);
+					Cast r = checkCast(from, bounds.get(i), targetWildcardType);
 					if (r.type < 0) return r;
 				}
 
 				if (result.type >= UNBOXING) {
 					result.type ^= 1;
-					result.type1 = Type.getWrapper(from.getActualType());
+					result.target = Type.getWrapper(from.getActualType());
 				} else if (result.distance != 0) {
-					result.type1 = from;
+					result.target = from;
 				}
 			}
-		}
-		return result;
-	}
-
-	private static final class TPCollector extends HashMap<String, IType> {
-		final HashSet<Object> batch = new HashSet<>(), prevBatch = new HashSet<>();
-
-		public TPCollector() {}
-
-		void reset() {
-			prevBatch.clear();
-			batch.clear();
+			case UNION_TYPE -> {
+				for (IType bound : ((CompoundType) to).getTraits()) {
+					Cast cast = checkCast(from, bound, targetWildcardType);
+					if (cast.type >= 0) return cast;
+				}
+				return ERROR(IMPOSSIBLE);
+			}
 		}
 
-		boolean flip() {
-			if (batch.isEmpty()) return true;
-			prevBatch.addAll(batch);
-			batch.clear();
-			return false;
+		Cast r = checkCast(from.rawType(), to.rawType(), targetWildcardType);
+		if (r.type != UPCAST && r.type != DOWNCAST) return r;
+
+		if ((flags&256) != 0) return r.type == UPCAST ? r.implicitCastTo(to) : r.withType(to);
+
+		genericCastCheck:
+		if (r.type == UPCAST && (flags & 2) != 0) {
+			var fc = context.inferGeneric(from, to.owner());
+			/*if (fc == null) {
+				if ((flags & 1) == 0) break genericCastCheck;
+				fc = ((ParameterizedType) from).typeParameters;
+			}*/
+			if (fc == null) throw new AssertionError();
+
+			var tc = context.inferGeneric(to, from.owner());
+			if (tc == null) {
+				if ((flags & 2) == 0) break genericCastCheck;
+				tc = ((ParameterizedType) to).typeParameters;
+			}
+
+			if (fc.size() != tc.size()) return ERROR(GENERIC_PARAM_COUNT);
+
+			for (int i = 0; i < fc.size(); i++) {
+				Cast v = checkCast(fc.get(i), tc.get(i), targetWildcardType);
+				if (v.type != UPCAST) return ERROR(IMPOSSIBLE);
+			}
 		}
 
-		@Override
-		public IType getOrDefault(Object key, IType def) {
-			if (prevBatch.contains(key)) return Signature.unboundedWildcard();
-			batch.add(key);
-			return super.getOrDefault(key, def);
-		}
-	}
-	private final TPCollector collector = new TPCollector();
-	private IType getTypeParamBound(/*TypeVariable*/IType type, Map<String, List<IType>> typeVariables) {
-		if (type.kind() == SIMPLE_TYPE) return type;
-
-		var substitution = collector; substitution.reset();
-		Inferrer.substituteMissingTypeParametersToBound(typeVariables, substitution);
-
-		do {
-			type = Inferrer.substituteTypeVariables(type, substitution, typeVariables);
-		} while (!substitution.flip());
-
-		return type;
+		return r.withType(to);
 	}
 
 	/**
-	 * Compare only, not directly usable
+	 * 仅用于比较，合并非静态泛型参数，WIP
 	 */
 	private static IType mergeSubClass(ParameterizedType gg) {
 		CharList sb = new CharList();
@@ -323,61 +359,7 @@ public class TypeCast {
 		return gg1;
 	}
 
-	private Cast genericCast(IType from, IType to, int etype) {
-		if (from.equals(to)) return RESULT(UPCAST, 0);
-
-		List<IType> fc, tc;
-
-		if (to.kind() == PARAMETERIZED_TYPE) {
-			ParameterizedType gt = (ParameterizedType) to;
-			etype = gt.wildcard;
-			tc = gt.typeParameters;
-		} else {
-			tc = null;
-		}
-
-		Cast r = checkCast(from.rawType(), to.rawType(), etype);
-
-		if (from.kind() == PARAMETERIZED_TYPE) {
-			fc = ((ParameterizedType)from).typeParameters;
-
-			if (fc.size() == 1 && fc.get(0) == WildcardType.anyGeneric) {
-				return r.type == UPCAST ? r.setAnyCast(to) : r;
-			}
-		} else {
-			fc = null;
-		}
-
-		if (r.type != UPCAST && r.type != DOWNCAST) return r;
-
-		// 计算泛型继承并擦除类型
-		genericCastCheck:
-		if (to.owner() != null && from.owner() != null) {
-			if (tc == null) {
-				tc = context.inferGeneric(to, from.owner());
-				if (tc == null) break genericCastCheck;
-			}
-
-			if (fc == null) {
-				fc = context.inferGeneric(from, to.owner());
-				if (fc == null) break genericCastCheck;
-			}
-
-			if (fc.size() != tc.size()) return ERROR(GENERIC_PARAM_COUNT);
-
-			for (int i = 0; i < fc.size(); i++) {
-				Cast v = checkCast(fc.get(i), tc.get(i), EXTENDS_WILDCARD);
-				if (v.type != UPCAST) return ERROR(IMPOSSIBLE);
-			}
-		} else {
-			if (fc != null && tc != null) throw new AssertionError("primitive not resolved");
-			// 基本类型泛型由CompileContext的resolveType处理，并根据模板生产
-		}
-
-		return r;
-	}
-
-	public Cast checkCast(Type from, Type to, int inheritType) {
+	private Cast checkCast(Type from, Type to, int wildcardType) {
 		if (from.equals(to)) return RESULT(UPCAST, 0);
 		if (from.type == VOID || to.type == VOID) return ERROR(IMPOSSIBLE);
 
@@ -385,7 +367,7 @@ public class TypeCast {
 			// 装箱
 			if (!to.isPrimitive()) {
 				int box = from.type;
-				Cast cast = checkCast(Type.getWrapper(box), to, inheritType);
+				Cast cast = checkCast(Type.getWrapper(box), to, wildcardType);
 
 				// 让byte可以转换到Integer
 				if (cast.type < UPCAST) {
@@ -393,7 +375,7 @@ public class TypeCast {
 					if (box == 0) return ERROR(FROM_PRIMITIVE);
 
 					//noinspection MagicConstant
-					cast = checkCast(from, Type.primitive(box), inheritType);
+					cast = checkCast(from, Type.primitive(box), wildcardType);
 					if (cast.type < UPCAST) return ERROR(FROM_PRIMITIVE);
 				}
 
@@ -407,7 +389,7 @@ public class TypeCast {
 			}
 
 			// 泛型
-			if (inheritType >= 0) return ERROR(IMPOSSIBLE);
+			if (wildcardType >= 0) return ERROR(IMPOSSIBLE);
 
 			// 皆为基本
 			int fCap = Type.getSort(from.type)-1;
@@ -447,7 +429,7 @@ public class TypeCast {
 			return NUMBER(fCap == 2 ? LOSSY : NUMBER_UPCAST, distance, (Opcodes.I2L-17) + (tCap + Math.max(fCap, 4)*3));
 		} else if (to.isPrimitive()) {
 			// 泛型
-			if (inheritType >= 0) return ERROR(IMPOSSIBLE);
+			if (wildcardType >= 0) return ERROR(IMPOSSIBLE);
 			// 拆箱
 			int primitive = getWrappedPrimitive(from);
 			if (primitive == 0) return ERROR(TO_PRIMITIVE);
@@ -457,7 +439,7 @@ public class TypeCast {
 				cast = RESULT(UNBOXING, DISTANCE_BOXING);
 			} else {
 				//noinspection MagicConstant
-				cast = checkCast(Type.primitive(primitive), to, inheritType);
+				cast = checkCast(Type.primitive(primitive), to, wildcardType);
 				if (cast.type < LOSSY) return cast;
 				assert cast.type <= NUMBER_UPCAST;
 
@@ -471,7 +453,7 @@ public class TypeCast {
 		// 皆非
 
 		// 反转 基本类型不适用于Generic
-		if (inheritType == SUPER_WILDCARD) {
+		if (wildcardType == SUPER_WILDCARD) {
 			Type tmp = from;
 			from = to;
 			to = tmp;
@@ -496,7 +478,7 @@ public class TypeCast {
 			if (arrayDelta > 0) {
 				//int[]      [] t1 = null;
 				//Object     [] t2 = t1;
-				String owner = inheritType == SUPER_WILDCARD ? from.owner : to.owner;
+				String owner = wildcardType == SUPER_WILDCARD ? from.owner : to.owner;
 				if (owner == null) return ERROR(IMPOSSIBLE); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
@@ -515,16 +497,12 @@ public class TypeCast {
 
 		// 类继承 此处：f.array == t.array
 		// 被注释掉的部分会equals不用重复检测
-		// if (inheritType == EX_NONE) return /*from.owner.equals(to.owner) ? RESULT(UPCAST, 0) : */ERROR(E_NEVER);
+		// if (wildcardType == EX_NONE) return /*from.owner.equals(to.owner) ? RESULT(UPCAST, 0) : */ERROR(E_NEVER);
 
-		return checkInheritable(from, to);
-	}
-	public Cast checkInheritable(Type from, Type to) {
 		var fromClass = context.resolve(from.owner);
 		var toClass = context.resolve(to.owner);
 
-		if (fromClass == null) return ERROR(UNDEFINED);
-		if (toClass == null) return ERROR(UNDEFINED);
+		if (fromClass == null || toClass == null) return ERROR(UNDEFINED);
 
 		// 本来是不该发生的（前面检测了），但是说不定未来会支持class aliasing呢/doge
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
@@ -533,7 +511,11 @@ public class TypeCast {
 		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
 		// to.parent == null => !Object (alias object or ??)
-		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 && toClass.parent() != null && (fromClass.parent() != null || fromClass.name().equals("java/lang/Object")) ? DOWNCAST(to) : ERROR(IMPOSSIBLE);
+		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0
+					&& toClass.parent() != null
+					&& (fromClass.parent() != null || fromClass.name().equals("java/lang/Object"))
+				? DOWNCAST(to)
+				: ERROR(IMPOSSIBLE);
 	}
 
 	private static final ToIntMap<Type> WRAPPER = new ToIntMap<>(9);
@@ -543,7 +525,7 @@ public class TypeCast {
 		}
 	}
 	public static int getWrappedPrimitive(IType self) {
-		if (self instanceof WildcardType ax) self = ax.getBound();
+		if (self instanceof CompoundType ax) self = ax.getBound();
 		return WRAPPER.getOrDefault(self, 0);
 	}
 }

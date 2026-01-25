@@ -10,12 +10,12 @@ import roj.asm.attr.ParameterAnnotations;
 import java.util.Collections;
 import java.util.List;
 
-public final class ParamAnnotationRef implements Attributed {
+public final class ParamAnnotationBinder implements Attributed {
 	public final MethodNode method;
 	public final int parameterId;
 	public int pos;
 
-	public ParamAnnotationRef(MethodNode method, int pos, int parameterId) {
+	public ParamAnnotationBinder(MethodNode method, int pos, int parameterId) {
 		this.method = method;
 		this.parameterId = parameterId;
 		this.pos = pos;

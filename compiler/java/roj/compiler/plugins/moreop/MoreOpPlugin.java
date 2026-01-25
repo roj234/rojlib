@@ -17,8 +17,8 @@ import roj.compiler.resolve.TypeCast;
  * @since 2024/11/11 22:34
  */
 @CompilerPlugin(name = "moreop", desc = """
-		More OP, More Power!
 		操作符重载测试插件
+		More OP, More Power!
 
 		为Lava语言提供一些操作符语法糖""")
 public final class MoreOpPlugin implements Compiler.ExprOp {

@@ -13,6 +13,7 @@ import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.types.PseudoType;
 import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -132,7 +133,7 @@ final class StringConcat extends Expr {
 				}
 
 				var type = node.type();
-				if (type.getClass() == Type.ADT.class) {
+				if (type.getClass() == PseudoType.class) {
 					node = callPseudoToString(ctx, node);
 					type = node.type();
 				}
@@ -157,7 +158,7 @@ final class StringConcat extends Expr {
 			for (int i = 0; i < nodes.size(); i++) {
 				Expr node = nodes.get(i);
 				var type = node.type();
-				if (type.getClass() == Type.ADT.class) {
+				if (type.getClass() == PseudoType.class) {
 					node = callPseudoToString(ctx, node);
 					type = node.type();
 				}
@@ -172,7 +173,7 @@ final class StringConcat extends Expr {
 		for (int i = 0; i < nodes.size(); i++) {
 			Expr node = nodes.get(i);
 			var type = node.type();
-			if (type.getClass() == Type.ADT.class) {
+			if (type.getClass() == PseudoType.class) {
 				node = callPseudoToString(lc, node);
 				type = node.type();
 			}
@@ -209,7 +210,7 @@ final class StringConcat extends Expr {
 		for (int i = 0; i < nodes.size(); i++) {
 			Expr node = nodes.get(i);
 			var type = node.type();
-			if (type.getClass() == Type.ADT.class) {
+			if (type.getClass() == PseudoType.class) {
 				node = callPseudoToString(lc, node);
 				type = node.type();
 			}

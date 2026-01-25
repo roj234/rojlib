@@ -76,7 +76,7 @@ public final class AnnotationRepo {
 
 	public void add(ClassNode data) {
 		Type klass = new Type(data);
-		add2(data.cp, data, klass);
+		add2(data, data, klass);
 		add1(data, data.fields, klass);
 		add1(data, data.methods, klass);
 	}
@@ -84,7 +84,7 @@ public final class AnnotationRepo {
 		for (int i = nodes.size()-1; i >= 0; i--) {
 			MemberNode node = nodes.get(i);
 			Node subNode = new Node(klass, node);
-			add2(data.cp, node, subNode);
+			add2(data, node, subNode);
 
 			if (!subNode.annotations.isEmpty()) {
 				if (klass.children.isEmpty())
@@ -93,12 +93,12 @@ public final class AnnotationRepo {
 			}
 		}
 	}
-	private void add2(ConstantPool cp, Attributed node, AnnotatedElement info) {
-		Annotations attr = node.getAttribute(cp, Attribute.VisibleAnnotations);
+	private void add2(ClassNode cn, Attributed node, AnnotatedElement info) {
+		Annotations attr = node.getAttribute(cn, Attribute.VisibleAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}
-		attr = node.getAttribute(cp, Attribute.InvisibleAnnotations);
+		attr = node.getAttribute(cn, Attribute.InvisibleAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}

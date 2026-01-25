@@ -65,7 +65,7 @@ public final class LinkedClass {
 		var classes = getHierarchyList(ctx);
 		if (classes.containsKey("java/util/List") && classes.containsKey("java/util/RandomAccess")) {
 			return iterateType = 1;
-		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/RandomAccessible") != null) {
+		} else if (Annotation.findInvisible(owner, owner, "roj/compiler/api/RandomAccessible") != null) {
 			int tmp;
 			if ((tmp = owner.getMethod("get")) >= 0 && owner.methods().get(tmp).rawDesc().startsWith("(I)") && owner.getMethod("size", "()I") >= 0) {
 				return iterateType = 2;
@@ -353,7 +353,7 @@ public final class LinkedClass {
 			synchronized (this) {
 				if (typeParamOwner != null) return typeParamOwner;
 
-				Signature sign = owner.getAttribute(owner.cp(), Attribute.SIGNATURE);
+				Signature sign = owner.getAttribute(Attribute.SIGNATURE);
 				if (sign == null) return typeParamOwner = Collections.emptyMap();
 
 				var typeParamOwner = new HashMap<String, List<IType>>();
@@ -410,7 +410,7 @@ public final class LinkedClass {
 			String parent = owner.parent();
 			if (parent != null) putDeclOrWarn(ctx, decl, parent);
 
-			var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
+			var classes = owner.getAttribute(Attribute.InnerClasses);
 			if (classes == null) return innerClasses = decl.isEmpty() ? Collections.emptyMap() : decl;
 
 			synchronized (this) {

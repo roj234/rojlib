@@ -40,7 +40,7 @@ public final class AsmPlugin extends InvokeHook {
 	private final HashMap<String, Expr> properties = new HashMap<>();
 
 	public AsmPlugin(Compiler api) {
-		var sandbox = new Sandbox("ASM Sandbox", AsmPlugin.class.getClassLoader());
+		var sandbox = new Sandbox("ASM Sandbox", AsmPlugin.class.getClassLoader(), true);
 		sandbox.allow("roj.compiler.plugins.asm.WriterImpl", false);
 		api.attachment(SANDBOX, sandbox);
 
@@ -85,7 +85,7 @@ public final class AsmPlugin extends InvokeHook {
 			case "cast": return new GenericCat(args.get(0));
 			case "asm":
 				var lambda = (Lambda) args.get(0);
-				lambda.write(null, TypeCast.ANYCAST(0, ParameterizedType.parameterized("roj/compiler/plugins/asm/WriterImpl", Type.klass("roj/asm/insn/CodeWriter"))));
+				lambda.write(null, TypeCast.IMPLICIT(0, ParameterizedType.parameterized("roj/compiler/plugins/asm/WriterImpl", Type.klass("roj/asm/insn/CodeWriter"))));
 
 				MethodNode impl = lambda.getImpl();
 				//impl.parsed(ctx.file.cp);

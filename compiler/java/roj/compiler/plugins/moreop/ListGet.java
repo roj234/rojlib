@@ -38,7 +38,7 @@ final class ListGet extends LeftValue {
 		cast = ctx.castTo(index.type(), Type.INT_TYPE, 0);
 
 		IType type = list.type();
-		var types = ctx.inferGeneric(type, "java/util/List");
+		var types = ctx.compiler.inferGeneric(type, "java/util/List");
 		componentType = types != null ? types.get(0) : Types.OBJECT_TYPE;
 		return this;
 	}

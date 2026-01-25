@@ -50,7 +50,10 @@ public class TestPlugin {
 			@Override public String toString() {return null;}
 			@Override public IType type() {return null;}
 			@Override protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-				throw new FastFailException("[\n  表达式="+node+"\n  解析="+(node = node.resolve(CompileContext.get()))+"\n  返回类型="+node.type()+"\n]");
+				String preBreakpoint = node.toString();
+				Expr postBreakpoint = node.resolve(CompileContext.get());
+				node = postBreakpoint;
+				throw new FastFailException("[\n  表达式="+preBreakpoint+"\n  解析="+postBreakpoint+"\n  返回类型="+postBreakpoint.type()+"\n]");
 			}
 		});
 	}

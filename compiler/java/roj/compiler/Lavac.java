@@ -5,6 +5,8 @@ import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
+import roj.asmx.AnnotatedElement;
+import roj.asmx.AnnotationRepoManager;
 import roj.collect.ArrayList;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.CompilerPlugin;
@@ -18,12 +20,12 @@ import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.FastFailException;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
 import java.nio.charset.Charset;
 import java.util.List;
 
@@ -36,45 +38,17 @@ public final class Lavac extends LavaCompiler {
 	public static String getCompileTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 
-	public static final String VERSION = "1.2.0-alpha (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.3.0-alpha (compiled on "+getCompileTime()+")";
 
 	private Charset charset;
 	private final ArrayList<CompileUnit> allFiles = new ArrayList<>();
 
 	public static void main(String[] args) throws IOException, ReflectiveOperationException {
-		if (args.length < 1) {
-			System.out.println("""
-				用法: lavac <配置> <源文件>[,<java文件>|<文件夹>]
-				其中, 可能的选项包括:
-				      -cache <目录>              指定编译器缓存文件夹的位置
-				      -classpath/-cp <目录>      指定查找用户类文件的位置
-				      -module                    使用模块编译模式，在上述文件夹中查找模块 (未实现)
-				      -d <路径>                  指定放置编译的类文件的位置
-
-				      -encoding <编码>           指定源文件使用的字符编码
-				      -g                         选择生成哪些调试信息
-				        可用的值有：compiler,lines,vars,source,params 或 all 并以逗号分隔
-
-				      -maxWarn <数值>            最大允许显示的警告数量
-				      -maxError <数值>           最大允许显示的错误数量
-				      -Werror                    出现警告时终止编译
-				      -nowarn                    不生成任何警告
-
-				      -features +<feat1>[,-<feat2>]   启用或禁用Lava语言特性
-				      -target <发行版>                生成支持不高于特定 JVM 版本的类文件
-				        你可以在任何目标版本中使用编译器-only特性，例如var
-				      -processor <class1>[,<class2>]  指定实现了LavaAPI的注解处理程序的全限定名称
-				      -plugin <class1>[,<class2>]     指定实现了LavaAPI的编译器插件的全限定名称
-				        请注意，注解处理程序和编译器插件将在JVM的-cp选项中寻找，编译器的-cp选项只影响编译
-				        这么做不仅简单，同时还能提升安全性，防止参数注入攻击
-
-				      -version                   显示版本信息并退出
-				""");
-			return;
-		}
+		if (args.length < 1) {showHelp();return;}
 
 		String cp = "";
 		String bin = null;
+		String mainClass = null;
 
 		int maxWarn = 100, maxError = 100, warnOps = 0;
 		int debugOps = 15;
@@ -96,17 +70,21 @@ public final class Lavac extends LavaCompiler {
 		loop:
 		for (; i < args.length; i++) {
 			switch (args[i]) {
-				case "-run" -> {
-					try {
-						new LambdaLinker().compile(args[++i], Runnable.class).run();
-					} catch (Exception e) {
-						Helpers.athrow(e);
+				default -> {
+					if (args[i].startsWith("-")) {
+						System.out.println("未知的参数 "+args[i]);
+						showHelp();
+						return;
+					} else {
+						break loop;
 					}
 				}
 				case "-version" -> {
 					System.out.println("lavac "+VERSION);
-					System.exit(0);
+					return;
 				}
+				case "-stub" -> compiler.structOnly = true;
+				case "-main" -> mainClass = args[++i];
 				case "-encoding" -> compiler.charset = Charset.forName(args[++i]);
 				case "-maxWarn" -> maxWarn = Integer.parseInt(args[++i]);
 				case "-maxError" -> maxError = Integer.parseInt(args[++i]);
@@ -174,7 +152,6 @@ public final class Lavac extends LavaCompiler {
 						}
 					}
 				}
-				default -> {break loop;}
 			}
 		}
 		CompileContext.set(null);
@@ -205,7 +182,7 @@ public final class Lavac extends LavaCompiler {
 
 		if (ok) {
 			System.out.println("编译成功");
-			if (bin == null) {
+			if (mainClass != null) {
 				try (var archive = new ZipFile(dst)) {
 					var scl = new ClassLoader(Lavac.class.getClassLoader()) {
 						@Override
@@ -225,7 +202,7 @@ public final class Lavac extends LavaCompiler {
 							return clazz;
 						}
 					};
-					Class<?> test = Class.forName("Test", true, scl);
+					Class<?> test = Class.forName(mainClass, true, scl);
 					lookup.findStatic(test, "main", MethodType.methodType(void.class, String[].class)).invoke((Object) new String[0]);
 					System.out.println("执行成功");
 				} catch (Throwable e) {
@@ -235,6 +212,57 @@ public final class Lavac extends LavaCompiler {
 		}
 
 		System.exit(ok ? 0 : -1);
+	}
+
+	private static void showHelp() {
+		System.out.println("""
+			用法: lavac <配置> <源文件>[,<java文件>|<文件夹>]
+			其中, 可能的选项包括:
+				  -cache <目录>              指定编译器缓存文件夹的位置
+				  -classpath/-cp <目录>      指定查找用户类文件的位置
+				  -module                    使用模块编译模式，在上述文件夹中查找模块 (未实现)
+				  -d <路径>                  指定放置编译的类文件的位置 (注意：lavac直接生成单个jar包，以避免生成大量小文件)
+
+				  -encoding <编码>           指定源文件使用的字符编码
+				  -g                         选择生成哪些调试信息
+					可用的值有：compiler,lines,vars,source,params 或 all 并以逗号分隔
+
+				  -maxWarn <数值>            最大允许显示的警告数量
+				  -maxError <数值>           最大允许显示的错误数量
+				  -Werror                    出现警告时终止编译
+				  -nowarn                    不生成任何警告
+
+				  -features +<feat1>[,-<feat2>]   启用或禁用Lava语言特性
+				  -target <发行版>                生成支持不高于特定 JVM 版本的类文件
+					你可以在任何目标版本中使用编译器-only特性，例如var
+				  -processor <class1>[,<class2>]  指定实现了LavaAPI的注解处理程序的全限定名称
+				  -plugin <class1>[,<class2>]     指定实现了LavaAPI的编译器插件的全限定名称
+					请注意，注解处理程序和编译器插件将在JVM的-cp选项中寻找，编译器的-cp选项只影响编译
+					这么做不仅简单，同时还能提升安全性，防止参数注入攻击
+
+				  -stub                      生成类型存根（成员信息）而不编译方法体
+				  -main <class>              编译后立即执行<class>的main方法
+				  	警告：仅用于特殊用途
+
+				  -version                   显示版本信息并退出
+			""");
+		System.out.println("Version: lavac "+VERSION);
+		System.out.println("\nFeatures: ");
+		for (Field declaredField : Compiler.class.getDeclaredFields()) {
+			String name = declaredField.getName();
+			if (name.startsWith("STATE_") || name.startsWith("JAVA_")) continue;
+			System.out.println(name);
+		}
+
+		System.out.println("\nPlugins: ");
+		String compilePlugin = CompilerPlugin.class.getName().replace('.', '/');
+		for (AnnotatedElement annotation : AnnotationRepoManager.getAnnotations(compilePlugin, Lavac.class.getClassLoader())) {
+			System.out.println(annotation.owner().replace('/', '.'));
+			String string = annotation.annotations().get(compilePlugin).getString("desc");
+			int i = string.indexOf('\n');
+			if (i >= 0) string = string.substring(0, i);
+			System.out.println("\t"+string);
+		}
 	}
 
 	private boolean compile(File output) {
@@ -296,6 +324,7 @@ public final class Lavac extends LavaCompiler {
 		String s = IOUtil.getExtension(file.getName());
 		if (s.equals("zip") || s.equals("jar")) {
 			try {
+				System.out.println("AddLibrary "+file);
 				addLibrary(new JarLibrary(file));
 			} catch (IOException e) {
 				System.err.println("错误：无法读取类文件"+file+"的内容");

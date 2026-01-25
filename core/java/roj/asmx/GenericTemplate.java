@@ -107,7 +107,12 @@ public class GenericTemplate extends CodeWriter {
 
 	public void multiArray(String clz, int dimension) { super.multiArray(replaceArrayClass(clz), dimension); }
 	public void clazz(byte code, String clz) { super.clazz(code, replaceArrayClass(clz)); }
-	public void field(byte code, String owner, String name, String type) { super.field(code, owner, name, replaceDesc(type, internalType)); }
+	public void field(byte code, String owner, String name, String type) {
+		if (name.equals("TYPE") && owner.startsWith("java/lang/")) {
+			owner = Type.getWrapper(internalType).owner;
+		}
+		super.field(code, owner, name, replaceDesc(type, internalType));
+	}
 	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		if (owner.equals(curr.name())) {
 			desc = replaceDesc(desc, internalType);

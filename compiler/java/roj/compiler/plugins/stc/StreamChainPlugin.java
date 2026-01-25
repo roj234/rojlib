@@ -17,6 +17,7 @@ import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.LeftValue;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.types.PseudoType;
 import roj.util.TypedKey;
 
 import java.util.Collections;
@@ -132,7 +133,7 @@ public class StreamChainPlugin implements Compiler.Resolver {
 			int flag = getSTATE(chain.get(chain.size() - 1)) != 2 ? 1 : 0;
 			Type visibleType;
 			if (flag == 0) visibleType = owner.returnType();
-			else visibleType = new Type.ADT(exactType.getActualType(), owner.owner());
+			else visibleType = new PseudoType(exactType.getActualType(), owner.owner());
 
 			if (_self.getParent() instanceof ChainExpr altChain) {
 				altChain.targetType = flag;

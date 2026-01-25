@@ -112,11 +112,7 @@ public class ZipPacker extends MBOutputStream implements ArchivePacker<ZipFile, 
 		}
 
 		long delta = entryBeginOffset - entry.startPos();
-		entry.offset += delta;
-		buf.clear();
-		writeCEN(buf, entry);
-		entry.offset -= delta;
-		CENs.put(buf);
+		writeCEN(CENs, entry, delta);
 		entryCount++;
 		buf.clear();
 	}
@@ -139,7 +135,7 @@ public class ZipPacker extends MBOutputStream implements ArchivePacker<ZipFile, 
 		if (entry == null) return;
 		impl.closeEntry();
 
-		writeCEN(CENs, entry);
+		writeCEN(CENs, entry, 0);
 		entryCount++;
 	}
 

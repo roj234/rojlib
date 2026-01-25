@@ -200,7 +200,7 @@ public class Translator extends Plugin {
 		for (int i = 0; i < array.size(); i++) {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {
-				sb.append('\t').append(data.cp.indexOf(s)).append('=').append('"');
+				sb.append('\t').append(i+1).append('=').append('"');
 				Tokenizer.escape(sb, ((CstString) s).value().str()).append('"').append('\n');
 
 				any = true;

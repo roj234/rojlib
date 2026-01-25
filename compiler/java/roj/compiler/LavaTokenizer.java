@@ -7,7 +7,6 @@ import roj.collect.IntBiMap;
 import roj.collect.TrieTree;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.diagnostic.TranslatableString;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
 import roj.io.IOUtil;
@@ -53,7 +52,7 @@ public final class LavaTokenizer extends Tokenizer {
 		// 类型
 		"void,boolean,byte,char,short,int,long,float,double," +
 		// 表达式
-		"this,true,false,null,new,instanceof,\1b," +
+		"this,true,false,null,new,instanceof,\1UDL," +
 
 		// 方法内
 		"for,while,do," +
@@ -79,7 +78,7 @@ public final class LavaTokenizer extends Tokenizer {
 		_unused0 = 40, CONST = 41, ADT = 42,
 
 		VOID = 43, BOOLEAN = 44, BYTE = 45, CHAR = 46, SHORT = 47, INT = 48, LONG = 49, FLOAT = 50, DOUBLE = 51,
-		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _unused1 = 58,
+		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, UDL = 58,
 
 		FOR = 59, WHILE = 60, DO = 61,
 		CONTINUE = 62, BREAK = 63, GOTO = 64, RETURN = 65, THROW = 66,
@@ -247,14 +246,16 @@ public final class LavaTokenizer extends Tokenizer {
 	public static String byId(short id) { return id < 100 ? keywords[id - 10] : operators[id - 100]; }
 
 	@Override
-	protected Token newWord() {
-		return new Token() {
-			@Override
-			public short type() {
-				short id = super.type();
-				return id < 0 || literalState[state].contains(id) ? id : LITERAL;
-			}
-		};
+	protected Token newWord() {return new MyToken();}
+	private final class MyToken extends Token {
+		@Override
+		public short type() {
+			short id = super.type();
+			return id < 0 || literalState[state].contains(id) ? id : LITERAL;
+		}
+
+		@Override
+		public Token immutable() {return new MyToken().init(super.type(), super.pos(), super.text());}
 	}
 
 	@Override
@@ -303,10 +304,25 @@ public final class LavaTokenizer extends Tokenizer {
 		return null;
 	}
 
+	public TrieTree<Integer> udlCallbacks;
+
 	@Override
 	protected Token onInvalidNumber(int errorLoc, String reason) throws ParseException {
 		if (reason.equals("lexer.number.longLarge") && found.equals("9223372036854775808"))
 			return formClip(LONG_MIN_VALUE, "9223372036854775808");
+		if (reason.equals("lexer.number.notNumber:") && udlCallbacks != null) {
+			Token token = readLiteral();
+
+			CharList sb = found.reverse();
+			var udl = udlCallbacks.longestMatch(sb, 0, input.length());
+			if (udl != null) {
+				sb.reverse().setLength(sb.length() - udl.getIntKey());
+				return token.init(udl.getValue(), token.pos(), sb);
+			}
+
+			index = errorLoc;
+		}
+
 		if (reason.endsWith(":")) reason += "["+input.charAt(errorLoc)+"]";
 		CompileContext.get().report(errorLoc, Kind.ERROR, reason);
 		//throw err(reason, i);
@@ -336,7 +352,7 @@ public final class LavaTokenizer extends Tokenizer {
 		var in = input;
 		int i = index;
 		var line = found;
-		do {
+		while (true) {
 			line.clear();
 			i = TextUtil.gAppendToNextCRLF(in, i, line);
 			for (int j = 0; j < line.length(); j++) {
@@ -348,7 +364,7 @@ public final class LavaTokenizer extends Tokenizer {
 						while (k < line.length()) {
 							if (WHITESPACE.contains(line.charAt(k))) {
 								doc.visitBlockTag(line.substring(j, k));
-								line.delete(0, k+1);
+								line.delete(0, k + 1);
 								break isBlockTag;
 							}
 							k++;
@@ -361,20 +377,18 @@ public final class LavaTokenizer extends Tokenizer {
 				}
 			}
 
-			doc.visitText(line);
-
-			while (true) {
-				char c = in.charAt(i);
-				if (c == ' ' || c == '\t') i++;
-				else {
-					if (c == '*') i++;
-					break;
-				}
+			int j = line.indexOf("*/");
+			if (j > 0) {
+				doc.visitText(line.substring(0, j));
+				i -= line.length() - j - 1;
+				break;
+			} else {
+				doc.visitText(line);
 			}
-		} while (in.charAt(i) != '/');
+		}
 
 		doc.visitEnd();
-		if (javadoc != null) LavaCompiler.debugLogger().error("冲走"+ javadoc);
+		if (javadoc != null) LavaCompiler.debugLogger().error("冲走"+javadoc);
 		javadoc = doc;
 		index = i+1;
 	}
@@ -475,7 +489,7 @@ public final class LavaTokenizer extends Tokenizer {
 	}
 
 	@Override
-	protected String i18n(String msg) { return TranslatableString.of(msg).translate(i18n, IOUtil.getSharedCharBuf()).toString(); }
+	protected String i18n(String msg) { return i18n.translate(msg); }
 
 	public final Token except(short type) throws ParseException {
 		Token w = next();

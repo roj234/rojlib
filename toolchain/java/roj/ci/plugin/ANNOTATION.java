@@ -88,9 +88,9 @@ public class ANNOTATION implements Plugin {
 		var annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
-			ConstantPool cp = data.cp();
+			ConstantPool cp = data.cp;
 
-			List<Annotation> annotations = Annotations.getAnnotations(cp, data, false);
+			List<Annotation> annotations = Annotations.getAnnotations(data, data, false);
 			for (int j = 0; j < annotations.size(); j++) {
 				Annotation annotation = annotations.get(j);
 				if (annotation.type().equals("roj/ci/annotation/ReplaceConstant")) {
@@ -119,13 +119,13 @@ public class ANNOTATION implements Plugin {
 			ClassNode data = annotatedClass.get(i).getData();
 			data.modifier |= Opcodes.ACC_PUBLIC;
 			for (MethodNode method : data.methods) {
-				Annotation annotation = Annotation.findInvisible(data.cp, method, "roj/ci/annotation/Public");
+				Annotation annotation = Annotation.findInvisible(data, method, "roj/ci/annotation/Public");
 				if (annotation != null) {
 					method.modifier |= Opcodes.ACC_PUBLIC;
 				}
 			}
 			for (FieldNode field : data.fields) {
-				Annotation annotation = Annotation.findInvisible(data.cp, field, "roj/ci/annotation/Public");
+				Annotation annotation = Annotation.findInvisible(data, field, "roj/ci/annotation/Public");
 				if (annotation != null) {
 					field.modifier |= Opcodes.ACC_PUBLIC;
 				}

@@ -4,16 +4,12 @@ import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.insn.CodeWriter;
-import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.Context;
 import roj.asmx.TransformException;
 import roj.asmx.Transformer;
 import roj.collect.HashSet;
-
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -38,9 +34,9 @@ public final class EventTransformer implements Transformer, ConstantPoolHooks.Ho
 			synchronized (knownEvents) {knownEvents.add(name);}
 		}
 
-		Signature signature = data.getAttribute(data.cp, Attribute.SIGNATURE);
+		Signature signature = data.getAttribute(data, Attribute.SIGNATURE);
 		if (signature != null) {
-			Map<String, List<IType>> typeParams = signature.typeVariables;
+			var typeParams = signature.typeVariables;
 			//if (typeParams.size() > 1) throw new TransformException("事件类"+data.name+"不能有超过一个泛型参数！");
 			if (typeParams.size() > 0 &&
 				null == data.getMethodObj("getGenericType", "()Ljava/lang/String;") &&

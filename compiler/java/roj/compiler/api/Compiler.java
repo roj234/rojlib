@@ -17,9 +17,11 @@ import roj.asmx.AnnotationRepo;
 import roj.collect.ToIntMap;
 import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
+import roj.compiler.LavaCompiler;
 import roj.compiler.LavaTokenizer;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.ParamAnnotationBinder;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.PrefixOperator;
 import roj.compiler.diagnostic.Kind;
@@ -67,8 +69,9 @@ public interface Compiler {
 	void unlink(ClassNode info);
 	/**
 	 * 获取类继承层级信息
-	 * 值的高16位存放递增的index{@link CompileContext#getCommonParent(ClassNode, ClassNode)}，低16位存放info类到key类需要向上转型的最低次数
+	 * 值的高16位存放递增的index，低16位存放info类到key类需要向上转型的最低次数
 	 * @param info 目标类信息
+	 * @see LavaCompiler#getCommonAncestor(ClassNode, ClassNode)}
 	 */
 	@NotNull @Unmodifiable ToIntMap<String> getHierarchyList(ClassNode info);
 	/**
@@ -82,7 +85,7 @@ public interface Compiler {
 	/**
 	 * 获取泛型类型参数的实际类型
 	 * 注意：info和superType是同一类型时将会返回null！
-	 * @apiNote 最好用这个：{@link CompileContext#inferGeneric(IType, String)}
+	 * @apiNote 最好用这个：{@link LavaCompiler#inferGeneric(IType, String)}
 	 * @param superType 父类/接口的全限定名
 	 * @return 类型参数列表，当superType不是info的父类/接口时返回null
 	 * @throws ClassNotFoundException 当superType不存在时抛出
@@ -207,7 +210,7 @@ public interface Compiler {
 	 *     <ul>
 	 *       <li>{@code node}参数类型：
 	 *         <ul>
-	 *           <li>编译单元：{@link roj.compiler.asm.ParamAnnotationRef}</li>
+	 *           <li>编译单元：{@link ParamAnnotationBinder}</li>
 	 *           <li><i>classpath类：暂未实现</i></li>
 	 *         </ul>
 	 *       </li>
@@ -238,9 +241,6 @@ public interface Compiler {
 	AnnotationRepo getClasspathAnnotations();
 	//endregion
 	//region 库加载API
-	/**
-	 * @since 2024/5/21 2:47
-	 */
 	@FunctionalInterface
 	interface Resolver {
 		/**
@@ -310,16 +310,16 @@ public interface Compiler {
 	//endregion
 	//region 表达式解析API
 	/**
-	 * 创建注解语句处理器，详见文档
+	 * 创建注解语句处理器，以 @typename 的方式开始DSL，详见文档
 	 * @see AStatementParser
-	 * @since 2025/9/24
+	 * @since 1.2
 	 * @param typename 注解类型名称，不存在将自动生成
 	 * @param impl 注解语句处理器实现
 	 * @return 类型节点
 	 */
 	@NotNull ClassNode addAnnotationStatement(String typename, AnnotationStatement impl);
 	interface AnnotationStatement {
-		void parse(CompileContext ctx, MethodWriter writer, List<AnnotationPrimer> annotations);
+		void parse(CompileContext ctx, MethodWriter writer, List<AnnotationBuilder> annotations);
 	}
 
 	/**
@@ -337,7 +337,6 @@ public interface Compiler {
 	 * <p>
 	 * 所有名称为token的参数都是运算符，<br>
 	 * 它们可以是任意字符串、可以包含空白字符、并且不能与其它注册的运算符重复
-	 * @since 2024/2/20 1:31
 	 */
 	@FunctionalInterface
 	interface StartOp { Expr parse(CompileContext ctx) throws ParseException;}
@@ -346,7 +345,18 @@ public interface Compiler {
 	interface ContinueOp<T extends Expr> { T parse(CompileContext ctx, T node) throws ParseException;}
 
 	@FunctionalInterface
-	interface BinaryOp { Expr parse(CompileContext ctx, Expr left, Expr right);}
+	interface BinaryOp { Expr parse(CompileContext ctx, Expr left, Expr right); }
+
+	@FunctionalInterface
+	interface UDLOp { Expr parse(CompileContext ctx, Token token) throws ParseException; }
+
+	/**
+	 * 注册自定义字面量
+	 * @param unit 单位，如km，应(SHOULD)只包含字母或数字，不得(MUST NOT)以[0-9]开始，不应(SHOULD NOT)以[a-fA-FLl]开始
+	 * @param parser 接收完整的数字Token，如 0x3km 需要自行判断格式、解析数字、并抛出异常
+	 * @since 1.3
+	 */
+	void newUDLOp(String unit, UDLOp parser);
 
 	/**
 	 * 新增前缀运算符, 后缀可以直接使用TerminalOp

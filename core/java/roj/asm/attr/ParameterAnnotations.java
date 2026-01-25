@@ -1,11 +1,14 @@
 package roj.asm.attr;
 
+import org.jetbrains.annotations.NotNull;
+import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -15,9 +18,10 @@ import java.util.List;
 public final class ParameterAnnotations extends Attribute {
 	public static final String VISIBLE = "RuntimeVisibleParameterAnnotations", INVISIBLE = "RuntimeInvisibleParameterAnnotations";
 
-	public static List<List<Annotation>> getParameterAnnotation(ConstantPool cp, MethodNode m, boolean vis) {
-		ParameterAnnotations pa = m.getAttribute(cp, vis ? VisibleParameterAnnotations : InvisibleParameterAnnotations);
-		return pa == null ? null : pa.annotations;
+	@NotNull
+	public static List<List<Annotation>> get(ClassNode cn, MethodNode m, boolean vis) {
+		ParameterAnnotations pa = m.getAttribute(cn, vis ? VisibleParameterAnnotations : InvisibleParameterAnnotations);
+		return pa == null ? Collections.emptyList() : pa.annotations;
 	}
 
 	public ParameterAnnotations(boolean visibleForRuntime) {

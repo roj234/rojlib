@@ -35,7 +35,7 @@ final class MapGet extends LeftValue {
 		index = index.resolve(ctx);
 
 		IType type = map.type();
-		var types = ctx.inferGeneric(type, "java/util/Map");
+		var types = ctx.compiler.inferGeneric(type, "java/util/Map");
 		if (types != null) {
 			componentType = types.get(0);
 			cast = ctx.castTo(index.type(), types.get(1), 0);

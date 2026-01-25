@@ -60,7 +60,7 @@ final class DAOMaker {
 		var parIds = new ToIntMap<String>();
 
 		for (var method : ref.methods) {
-			Annotation query = Annotation.findInvisible(ref.cp, method, "roj/sql/Query");
+			Annotation query = Annotation.findInvisible(ref, method, "roj/sql/Query");
 			if (query == null) continue;
 
 			variables.clear();
@@ -103,7 +103,7 @@ final class DAOMaker {
 
 			boolean isSelectStatement = sql.startsWith("select ") || sql.startsWith("SELECT ");
 			boolean isBatch;
-			var extraType = method.getAttribute(ref.cp, Attribute.SIGNATURE);
+			var extraType = method.getAttribute(ref, Attribute.SIGNATURE);
 
 			if (isBatch = (parTypes.size() == 1 && ITERABLE_TYPES.contains(parTypes.get(0).owner))) {
 				if (isSelectStatement) throw new IllegalArgumentException(method+"的参数不能使用select语句");

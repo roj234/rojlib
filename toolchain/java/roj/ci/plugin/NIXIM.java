@@ -32,7 +32,7 @@ public class NIXIM implements Plugin {
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ClassNode data = ctx.get(i).getData();
-			Annotation nixim = Annotation.findInvisible(data.cp, data, CodeWeaver.A_INJECTION);
+			Annotation nixim = Annotation.findInvisible(data, data, CodeWeaver.A_INJECTION);
 
 			// noinspection all
 			String dest = nixim.getString("value");
@@ -49,7 +49,7 @@ public class NIXIM implements Plugin {
 			Member node = nodes.get(i);
 			if (node.name().startsWith("func_") || node.name().startsWith("field_")) continue;
 
-			List<Annotation> list = Annotations.getAnnotations(data.cp, node, false);
+			List<Annotation> list = Annotations.getAnnotations(data, node, false);
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);
 				if (anno.type().equals(CodeWeaver.A_SHADOW)) {

@@ -5,7 +5,6 @@ import roj.asm.type.IType;
 import roj.asm.type.ParameterizedType;
 import roj.collect.BitSet;
 import roj.compiler.CompileContext;
-import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.diagnostic.Kind;
@@ -49,7 +48,7 @@ final class MultiReturn extends Expr {
 			}
 		}
 
-		LPSignature node = ctx.file.activeSignature;
+		var node = ctx.file.activeSignature;
 		if (node != null) {
 			IType type1 = node.values.get(node.values.size() - 1);
 			if (type1.owner().equals(RETURNSTACK_TYPE) && type1 instanceof ParameterizedType g) {

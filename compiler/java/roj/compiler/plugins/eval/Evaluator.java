@@ -53,7 +53,7 @@ public interface Evaluator {
 		HashMap<String, byte[]> data = new HashMap<>();
 		ArrayList<Member> invoker = new ArrayList<>();
 
-		var sandbox = new Sandbox("Evaluator Sandbox", Evaluator.class.getClassLoader());
+		var sandbox = new Sandbox("Evaluator Sandbox", Evaluator.class.getClassLoader(), true);
 		ctx.attachment(SANDBOX, sandbox);
 
 		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constexpr")) {

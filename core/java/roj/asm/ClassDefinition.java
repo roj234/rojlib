@@ -1,7 +1,5 @@
 package roj.asm;
 
-import org.jetbrains.annotations.Nullable;
-import roj.asm.cp.ConstantPool;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -11,8 +9,6 @@ import java.util.List;
  * @since 2021/7/22 18:20
  */
 public interface ClassDefinition extends Attributed {
-	@Nullable default ConstantPool cp() {return null;}
-
 	String name();
 	default void name(String name) {throw new UnsupportedOperationException(getClass().getName()+"是只读的");}
 	String parent();

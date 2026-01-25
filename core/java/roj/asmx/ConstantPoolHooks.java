@@ -137,7 +137,7 @@ public class ConstantPoolHooks implements Transformer {
 	}
 
 	private static Set<String> checkParameterAnnotations(ClassNode data, Member node, Set<String> classes, TypedKey<ParameterAnnotations> key) {
-		ParameterAnnotations attribute = node.getAttribute(data.cp, key);
+		ParameterAnnotations attribute = node.getAttribute(data, key);
 		if (attribute != null) {
 			if (classes.isEmpty()) classes = new HashSet<>();
 
@@ -178,7 +178,7 @@ public class ConstantPoolHooks implements Transformer {
 	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> key, HashMap<String, Object> ref) throws TransformException {
 		if (ref.isEmpty()) return false;
 
-		Annotations attr = node.getAttribute(data.cp, key);
+		Annotations attr = node.getAttribute(data, key);
 		boolean mod = false;
 		if (attr != null) {
 			List<Annotation> annotations = attr.annotations;

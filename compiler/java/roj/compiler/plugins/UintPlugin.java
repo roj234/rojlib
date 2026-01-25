@@ -16,6 +16,7 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.library.Library;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.types.PseudoType;
 import roj.util.OperationDone;
 
 import java.util.List;
@@ -52,8 +53,8 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 		@Override public IType type() {
 			return switch (is64) {
 				case 0 -> Type.INT_TYPE;
-				case 1 -> new Type.ADT('I', "uint32");
-				case 2 -> new Type.ADT('J', "uint64");
+				case 1 -> new PseudoType('I', "uint32");
+				case 2 -> new PseudoType('J', "uint64");
 				case 3 -> Type.LONG_TYPE;
 				default -> throw OperationDone.NEVER;
 			};

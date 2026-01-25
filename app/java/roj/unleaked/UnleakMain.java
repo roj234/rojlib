@@ -45,9 +45,9 @@ public class UnleakMain extends MethodHook {
 		try(var zipArchive = new ZipEditor(thePlugin)) {
 			String main = ConfigMaster.YAML.parse(zipArchive.getInputStream("plugin.yml")).asMap().getString("main").replace('.', '/') + ".class";
 			byte[] bytes = zipArchive.get(main);
-			ClassNode mainClass = ClassNode.parseAll(bytes);
+			ClassNode mainClass = ClassNode.parseSkeleton(bytes);
 
-			Code code = mainClass.getMethodObj("<init>", "()V").getAttribute(mainClass.cp, Attribute.Code);
+			Code code = mainClass.getMethodObj("<init>", "()V").getAttribute(mainClass, Attribute.Code);
 			for (InsnNode insn : code.instructions) {
 				var s = insn.descOrNull();
 				if (s != null && s.owner.indexOf('/') < 0 && s.owner.length() > 20) {

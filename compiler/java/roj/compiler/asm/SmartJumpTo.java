@@ -12,10 +12,10 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/2/25 0:17
  */
-final class OptimizedJumpTo extends JumpTo {
+final class SmartJumpTo extends JumpTo {
 	private Segment writeReplace;
 
-	public OptimizedJumpTo(byte code, Label target) { super(code, target); }
+	public SmartJumpTo(byte code, Label target) { super(code, target); }
 
 	public boolean isAlive() {return writeReplace == null;}
 
@@ -34,7 +34,7 @@ final class OptimizedJumpTo extends JumpTo {
 			}
 
 			Segment segment = segments.get(i);
-			if (!(segment instanceof OptimizedJumpTo j) || !j.isTerminate() || target == j.target) break;
+			if (!(segment instanceof SmartJumpTo j) || !j.isTerminate() || target == j.target) break;
 			target = j.target;
 		}
 
@@ -53,7 +53,7 @@ final class OptimizedJumpTo extends JumpTo {
 			// IfXX => A
 			// Goto => B
 			// A: ...
-			if (nonEmptySegments == 1 && segments.get(i - 1) instanceof OptimizedJumpTo t && t.isTerminate()) {
+			if (nonEmptySegments == 1 && segments.get(i - 1) instanceof SmartJumpTo t && t.isTerminate()) {
 				target = t.target;
 				code = (byte) (IFEQ + ((code - IFEQ) ^ 1));
 				t.writeReplace = StaticSegment.EMPTY;
@@ -139,6 +139,6 @@ final class OptimizedJumpTo extends JumpTo {
 	@Override
 	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		Label rx = copyLabel(target, to, blockMoved, clone);
-		return clone?new OptimizedJumpTo(code,rx):this;
+		return clone?new SmartJumpTo(code,rx):this;
 	}
 }

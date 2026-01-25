@@ -38,7 +38,7 @@ public @interface Transactional {
 	class Transformer implements ConstantPoolHooks.Hook<MethodNode> {
 		@Override
 		public boolean transform(ClassNode context, MethodNode node) throws TransformException {
-			Annotation transactional = Annotation.findInvisible(context.cp, node, "roj/sql/Transactional");
+			Annotation transactional = Annotation.findInvisible(context, node, "roj/sql/Transactional");
 
 			String name = node.name();
 

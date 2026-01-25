@@ -125,9 +125,6 @@ final class CompileStage implements Processor {
 				newMn.insn(Opcodes.ARETURN);
 				newMn.finish();
 			}
-			case "LenientGeneric" -> {
-				ctx.lenientGenericCast = true;
-			}
 		}
 	}
 }

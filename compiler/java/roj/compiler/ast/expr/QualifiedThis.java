@@ -67,7 +67,7 @@ final class QualifiedThis extends Expr {
 		String target = type.owner();
 		for (String itf : ctx.file.interfaces()) {
 			if (itf.equals(target)) continue;
-			if (ctx.instanceOf(itf, target))
+			if (ctx.compiler.instanceOf(itf, target))
 				return true;
 		}
 		return false;

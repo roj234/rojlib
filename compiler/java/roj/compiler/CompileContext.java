@@ -18,24 +18,24 @@ import roj.compiler.api.Compiler;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.api.Types;
 import roj.compiler.api.ValueBased;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Diagnostic;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.diagnostic.TranslatableString;
+import roj.compiler.diagnostic.TranslatableText;
 import roj.compiler.resolve.*;
+import roj.compiler.types.CompoundType;
 import roj.config.node.ConfigValue;
-import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.ParseException;
 import roj.text.TextUtil;
-import roj.text.Tokenizer;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
+import roj.util.function.Flow;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -43,6 +43,7 @@ import java.util.function.Function;
 
 import static roj.compiler.LavaCompiler.*;
 import static roj.compiler.LavaTokenizer.assign;
+import static roj.compiler.diagnostic.IText.*;
 
 /**
  * CompileContext 解析(Parse/Resolve)环境 线程本地+递归
@@ -59,8 +60,8 @@ public class CompileContext {
 	public final MethodParser bp;
 	public final LavaTokenizer tokenizer;
 
-	public final TypeCast caster = new TypeCast();
-	public final Inferrer inferrer = new Inferrer(this);
+	public final TypeCast caster;
+	public final Inferrer inferrer;
 
 	private ImportList importList;
 	public final HashMap<String, ClassNode> importCache = new HashMap<>(), importCacheMethod = new HashMap<>();
@@ -113,7 +114,7 @@ public class CompileContext {
 	 * lambda方法的序号
 	 */
 	protected int syntheticMethodId;
-	public String lambdaName() { return method.name()+"^lmd^"+(syntheticMethodId++);}
+	public String lambdaName() { return (method == null ? "field" : method.name())+"^lmd^"+(syntheticMethodId++);}
 	public String accessorName() {return "access^"+(syntheticMethodId++);}
 
 	/**
@@ -123,12 +124,6 @@ public class CompileContext {
 
 	// stage3 constant resolution
 	public boolean fieldDFS;
-
-	//
-	/**
-	 * 宽容的泛型转换检查 - 可能在运行时造成问题
-	 */
-	public boolean lenientGenericCast;
 
 	/**
 	 * 当前解析的文件所处的阶段
@@ -141,14 +136,11 @@ public class CompileContext {
 		this.ep = new ExprParser(this);
 		this.bp = ctx.createMethodParser(this);
 		this.variables = bp.getVariables();
-		this.caster.context = ctx;
+		this.caster = new TypeCast(ctx);
+		this.inferrer = new Inferrer(this);
 	}
 
 	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, compiler.hasFeature(Compiler.EMIT_LOCAL_VARIABLES), this);}
-
-	@NotNull public ToIntMap<String> getHierarchyList(ClassNode info) {return compiler.getHierarchyList(info);}
-	@NotNull public ComponentList getFieldList(ClassNode info, String name) {return compiler.getFieldList(info, name);}
-	@NotNull public ComponentList getMethodList(ClassNode info, String name) {return compiler.getMethodList(info, name);}
 
 	public void clear() {
 		this.file = null;
@@ -170,7 +162,6 @@ public class CompileContext {
 		int pos = this.tokenizer.index;
 		this.tokenizer.init(file.getCode());
 		this.tokenizer.index = pos;
-		this.caster.typeParams = file.classSignature == null ? Collections.emptyMap() : file.classSignature.typeVariables;
 		this.fieldDFS = false;
 		this.constructorChain.clear();
 		this.compileUnits.clear();
@@ -185,8 +176,6 @@ public class CompileContext {
 	}
 	public void setMethod(MethodNode node) {
 		file._setSign(node);
-		// LPSignature的typeParams具有继承功能
-		caster.typeParams = file.activeSignature == null ? Collections.emptyMap() : file.activeSignature.typeVariables;
 
 		inStatic = (node.modifier&Opcodes.ACC_STATIC) != 0;
 		noCallConstructor = inConstructor = node.name().startsWith("<");
@@ -223,7 +212,7 @@ public class CompileContext {
 		compileUnits.clear();
 	}
 
-	public String currentCodeBlockForReport() {return "[symbol.type,\" \","+file.name()+"]";}
+	public IText currentCodeBlockForReport() {return translatable("symbol.type").append(" ").append(literal(file));}
 
 	//region 错误报告
 
@@ -231,14 +220,14 @@ public class CompileContext {
 	protected boolean hasError;
 	public boolean hasError() {return hasError;}
 
-	private final CharList capturedError = new CharList();
+	private IText capturedError;
 	private boolean errorCaptureEnabled;
 
 	public void enableErrorCapture() {errorCaptureEnabled = true;}
-	public CharList getCapturedError() {return capturedError;}
+	public IText getCapturedError() {return capturedError;}
 	public void disableErrorCapture() {
 		errorCaptureEnabled = false;
-		capturedError.clear();
+		capturedError = null;
 	}
 
 	public int errorReportIndex;
@@ -256,16 +245,22 @@ public class CompileContext {
 		int start = pos.getWordStart();
 		int end = pos.getWordEnd();
 		if (end == 0) start = end = tokenizer.index;
-		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
+		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, translatable(message, args)));
+	}
+	public void report(Expr pos, Kind kind, IText message) {
+		int start = pos.getWordStart();
+		int end = pos.getWordEnd();
+		if (end == 0) start = end = tokenizer.index;
+		hasError |= compiler.report(new Diagnostic(file, kind, start, end, ((TranslatableText) message).getTranslationKey(), message));
 	}
 	public void report(int start, int end, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (checkArgument(args) || checkCapture(message, args)) return;
-		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
+		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, translatable(message, args)));
 	}
 
 	public void report(int pos, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (checkArgument(args) || checkCapture(message, args)) return;
-		hasError |= compiler.report(new Diagnostic(file, kind, pos, pos, message, args));
+		hasError |= compiler.report(new Diagnostic(file, kind, pos, pos, message, translatable(message, args)));
 	}
 
 	private static boolean checkArgument(Object[] args) {
@@ -277,11 +272,7 @@ public class CompileContext {
 
 	private boolean checkCapture(String message, Object[] arguments) {
 		if (errorCaptureEnabled) {
-			var tmp = IOUtil.getSharedCharBuf();
-			TranslatableString.of(message, arguments).translate(LavaTokenizer.i18n, tmp);
-			capturedError.clear();
-			capturedError.append('"');
-			Tokenizer.escape(capturedError, tmp, 0, '\'').append('"');
+			capturedError = translatable(message, arguments);
 			return true;
 		}
 		return false;
@@ -289,10 +280,10 @@ public class CompileContext {
 
 	public final void reportNoSuchType(Kind kind, Object owner) {
 		if (reportedType.add(owner))
-			report(kind, "symbol.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());}
+			report(kind, "symbol.noSuchSymbol", translatable("symbol.type"), owner, currentCodeBlockForReport());}
 	public final void reportNoSuchType(Expr node, Kind kind, Object owner) {
 		if (reportedType.add(owner))
-			report(node, kind, "symbol.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());
+			report(node, kind, "symbol.noSuchSymbol", translatable("symbol.type"), owner, currentCodeBlockForReport());
 	}
 	//endregion
 	// region 访问权限和final字段赋值检查
@@ -312,7 +303,7 @@ public class CompileContext {
 	public boolean canAccessSymbol(ClassNode type, Member member, boolean staticEnv, boolean report) {
 		String memberType = member instanceof FieldNode ? "symbol.field" : "invoke.method";
 		if (staticEnv && (member.modifier()&Opcodes.ACC_STATIC) == 0) {
-			if (report) report(Kind.ERROR, "symbol.nonStatic.symbol", type.name(), member.name(), memberType);
+			if (report) report(Kind.ERROR, "symbol.nonStatic.symbol", type.name(), member.name(), translatable(memberType));
 			return false;
 		}
 
@@ -324,7 +315,9 @@ public class CompileContext {
 			default: throw ResolveException.ofIllegalInput("semantic.resolution.illegalModifier", Integer.toHexString(flag));
 			case Opcodes.ACC_PUBLIC: return true;
 			case Opcodes.ACC_PROTECTED:
-				if (ClassUtil.arePackagesSame(type.name(), file.name()) || instanceOf(file.name(), type.name())) return true;
+				String testClass = file.name();
+				String instClass = type.name();
+				if (ClassUtil.arePackagesSame(type.name(), file.name()) || compiler.instanceOf(testClass, instClass)) return true;
 				modifier = "protected";
 				break;
 			case Opcodes.ACC_PRIVATE:
@@ -339,7 +332,7 @@ public class CompileContext {
 				modifier = "package-private";
 				break;
 		}
-		if (message != null) report(Kind.ERROR, message, memberType, type.name()+(member!=null?"."+member:""), modifier, file.name());
+		if (message != null) report(Kind.ERROR, message, translatable(memberType), type.name()+(member!=null?"."+member:""), modifier, file);
 		return false;
 	}
 
@@ -381,41 +374,48 @@ public class CompileContext {
 		var list = compiler.getMethodList(type, name);
 		if (list == ComponentList.NOT_FOUND) {
 			int argc = callerForDebug instanceof Invoke a ? a.getArgumentCount() : Integer.MAX_VALUE;
-			report(callerForDebug, Kind.ERROR, "symbol.noSuchSymbol", name.equals("<init>") ? "invoke.constructor" : "invoke.method", name, "[symbol.type,\" \","+type.name()+"]", reportSimilarMethod(type, name, argc));
+			report(callerForDebug, Kind.ERROR, "symbol.noSuchSymbol",
+					translatable(name.equals("<init>") ? "invoke.constructor" : "invoke.method"), name,
+					translatable("symbol.type").append(literal(type)).append(reportSimilarMethod(type, name, argc))
+			);
 		}
 		return list;
 	}
-	private String reportSimilarMethod(ClassNode type, String method, int argc) {
+	private IText reportSimilarMethod(ClassNode type, String method, int argc) {
 		var similar = new ArrayList<String>();
-		loop:
 		for (var entry : compiler.link(type).getMethods(compiler).entrySet()) {
 			if (entry.getKey().startsWith("<")) continue;
 
-			for (MethodNode node : entry.getValue().getMethods()) {
-				int parSize = node.parameters().size();
-				if (argc < parSize - ((node.modifier & Opcodes.ACC_VARARGS) != 0 ? 1 : 0)) continue loop;
-			}
+			boolean present = Flow.of(entry.getValue().getMethods())
+				.filter(node -> canAccessSymbol(resolve(node.owner()), node, false, false))
+				.anyMatch(node -> {
+					int parSize = node.parameters().size();
+					return argc >= parSize - ((node.modifier & Opcodes.ACC_VARARGS) != 0 ? 1 : 0);
+				});
 
-			checkSimilarity(method, entry.getKey(), similar);
+			if (present) checkSimilarity(method, entry.getKey(), similar);
 		}
 
-		if (similar.isEmpty()) return "";
+		if (similar.isEmpty()) return empty();
 
-		var sb = getTmpSb().append("symbol.similar:[invoke.method,\"");
-		sb.append(TextUtil.join(similar, "\n    "));
-		return sb.append("\"]").toString();
+		var rest = empty();
+		rest.append(TextUtil.join(similar, "\n    "));
+		return translatable("symbol.similar", translatable("invoke.method"), rest);
 	}
-	private String reportSimilarField(ClassNode type, String field) {
+	private IText reportSimilarField(ClassNode type, String field) {
 		var similar = new ArrayList<String>();
 		for (var entry : compiler.link(type).getFields(compiler).entrySet()) {
-			checkSimilarity(field, entry.getKey(), similar);
+			boolean present = Flow.of(entry.getValue().getMethods())
+				.anyMatch(node -> canAccessSymbol(resolve(node.owner()), node, false, false));
+
+			if (present) checkSimilarity(field, entry.getKey(), similar);
 		}
 
-		if (similar.isEmpty()) return "";
+		if (similar.isEmpty()) return empty();
 
-		var sb = getTmpSb().append("symbol.similar:[symbol.field,\"");
-		sb.append(TextUtil.join(similar, "\n    "));
-		return sb.append("\"]").toString();
+		var rest = empty();
+		rest.append(TextUtil.join(similar, "\n    "));
+		return translatable("symbol.similar", translatable("symbol.field"), rest);
 	}
 
 	//Pattern WORD = Pattern.compile("_+|(?>[A-Z])[a-z]+");
@@ -482,7 +482,52 @@ public class CompileContext {
 	 * @param type 类型
 	 */
 	@Nullable
-	public final ClassNode resolve(IType type) { return type.array() > 0 ? compiler.resolveArray(type) : compiler.resolve(type.owner()); }
+	public final ClassNode resolve(IType type) {
+		if (type.array() > 0) return compiler.resolveArray(type);
+		if (type.kind() == IType.BOUNDED_WILDCARD) return resolveWildcard((CompoundType) type);
+		return compiler.resolve(type.owner());
+	}
+
+	private ClassNode resolveWildcard(CompoundType compoundType) {
+		var traits = compoundType.getTraits();
+		if (traits.size() == 1) return compiler.resolve(compoundType.owner());
+
+		String typename = Type.getMethodDescriptor(traits);
+
+		ClassNode resolve = compiler.resolve(typename);
+		if (resolve != null) return resolve;
+
+		traits.subList(1, traits.size()).sort((o1, o2) -> o1.owner().compareTo(o2.owner()));
+		typename = Type.getMethodDescriptor(traits);
+
+		synchronized (compiler) {
+			resolve = compiler.resolve(typename);
+			if (resolve != null) return resolve;
+
+			ClassNode virtualNode = new ClassNode();
+			virtualNode.name(typename);
+
+			for (int i = 0; i < traits.size(); i++) {
+				IType trait = traits.get(i);
+				ClassNode type = resolve(trait);
+				if ((type.modifier & Opcodes.ACC_INTERFACE) != 0) {
+					virtualNode.addInterface(type.name());
+				} else {
+					if (!"java/lang/Object".equals(virtualNode.parent()))
+						throw new AssertionError("遇到多个非接口类型: " + traits);
+					assert i == 0;
+					virtualNode.parent(type.name());
+				}
+			}
+
+			compiler.addGeneratedClass(virtualNode);
+
+			// 在add之后改名字，这样只改变display name
+			virtualNode.name("*Wildcard<"+TextUtil.join(traits, " & ")+">");
+			return virtualNode;
+		}
+	}
+
 	/**
 	 * 解析一个类型表示, 包括将它的名称解析为全限定名称, 对泛型参数作出限制, 实现虚拟泛型等
 	 * @return 大部分时间和输入参数相同 有些Magic会被特殊处理
@@ -509,7 +554,7 @@ public class CompileContext {
 			}
 		}
 
-		Signature sign = info.getAttribute(info.cp(), Attribute.SIGNATURE);
+		Signature sign = info.getAttribute(Attribute.SIGNATURE);
 		int count = sign == null ? 0 : sign.typeVariables.size();
 
 		int typeFlag = compiler.getTypeFlag(info);
@@ -524,33 +569,26 @@ public class CompileContext {
 
 			if (params.size() != count && (typeFlag & TF_ANYARGC) == 0) {
 				if (count == 0) report(Kind.ERROR, "symbol.generic.paramCount.0", type.rawType());
-				else if (params.size() != 1 || params.get(0) != WildcardType.anyGeneric) {
+				else if (params.size() != 1 || params.get(0) != Types.anyGeneric) {
 					report(Kind.ERROR, "symbol.generic.paramCount", type.rawType(), params.size(), count);
 					return type;
 				}
 			}
 
 			if (sign == null) return type;
-			var itr = sign.typeVariables.values().iterator();
+			var itr = sign.typeVariables.iterator();
 
 			for (int i = 0; i < params.size(); i++) {
 				IType param = resolveType(params.get(i));
+				TypeVariableDeclaration declaration = itr.next();
+
 				if ((typeFlag & TF_ANYARGC) != 0) continue;
 
 				// skip if is AnyType (?)
 				if (param.kind() <= 2) {
-					/*var tmp = new MyHashMap<String, IType>();
-					for (Map.Entry<String, List<IType>> entry : sign.typeParams.entrySet()) {
-						List<IType> bound = entry.getValue();
-						tmp.put(entry.getKey(), bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
-					}*/
-
-					caster.typeParamsForTargetType = sign.typeVariables;
-					for (IType bound : itr.next()) {
-						//bound = Inferrer.clearTypeParam(bound, tmp, sign.typeParams);
+					for (IType bound : declaration) {
 						castTo(param, bound, 0);
 					}
-					caster.typeParamsForTargetType = null;
 				}
 
 				if (param instanceof ParameterizedType g && g.isUnboundedWildcard()) {
@@ -597,7 +635,7 @@ public class CompileContext {
 					report(Kind.ERROR, "type.staticGenericSub", type1, ic.name);
 				}
 
-				sign = info.getAttribute(info.cp(), Attribute.SIGNATURE);
+				sign = info.getAttribute(Attribute.SIGNATURE);
 				count = sign == null ? 0 : sign.typeVariables.size();
 
 				if (x.typeParameters.size() != count) {
@@ -612,7 +650,7 @@ public class CompileContext {
 			if (type.owner().equals("roj/compiler/api/Union")) {
 				List<IType> children = type1.typeParameters;
 				for (int i = 0; i < children.size(); i++) {
-					var child = getHierarchyList(resolve(children.get(i)));
+					var child = compiler.getHierarchyList(resolve(children.get(i)));
 
 					for (int j = i+1; j < children.size(); j++) {
 						if (child.containsKey(children.get(j).owner())) {
@@ -621,7 +659,7 @@ public class CompileContext {
 						}
 					}
 				}
-				return WildcardType.oneOf(type1.typeParameters);
+				return CompoundType.union(type1.typeParameters);
 			}
 		} else if (count > 0) {
 			report((typeFlag & TF_NORAW) != 0 ? Kind.ERROR : Kind.WARNING, "symbol.generic.rawTypes", type);
@@ -630,7 +668,7 @@ public class CompileContext {
 	}
 	//endregion
 	//region DotGet字符串解析
-	private static final String NO_ERROR = new String("");
+	public static final IText NO_ERROR = empty();
 
 	private ClassNode frStart;
 	private final ArrayList<FieldNode> frChains = new ArrayList<>();
@@ -645,8 +683,8 @@ public class CompileContext {
 	 * @see MemberAccess#resolveEx(CompileContext, Consumer, String)
 	 */
 	@Nullable
-	public final String resolveStaticClassOrField(CharList desc, boolean allowClassExpr) {
-		String error = NO_ERROR;
+	public final IText resolveStaticClassOrField(CharList desc, boolean allowClassExpr) {
+		IText error = NO_ERROR;
 		frClassPrefix = 0;
 
 		int slash = desc.indexOf("/");
@@ -660,7 +698,7 @@ public class CompileContext {
 			ClassNode type = resolve(desc.substring(0, slash++));
 			if (type != null) {
 				error = fcResolveInnerClass(desc, type, slash, error, allowClassExpr);
-				if (error == null || error.isEmpty()) return error;
+				if (error == null || error == NO_ERROR) return error;
 			}
 
 			int depth = 0;
@@ -679,7 +717,7 @@ public class CompileContext {
 
 				desc.setLength(length);
 				error = fcResolveInnerClass(desc, owner, slash, error, allowClassExpr);
-				if (error == null || error.isEmpty()) return error;
+				if (error == null || error == NO_ERROR) return error;
 
 				// to follow JLS, this loop should break once owner != null, but WHY?
 				// continue, or failure. I choose continue to fail later
@@ -691,35 +729,35 @@ public class CompileContext {
 					frStart = type;
 					frChains.clear();
 					frFinalType = null;
-					return "";
+					return NO_ERROR;
 				}
 
 				// 期待表达式，而不是类，Example: println(Object)
-				return "symbol.expression:[\""+desc+"\"]";
+				return translatable("symbol.expression", desc);
 			}
 		}
 
 		//noinspection StringEquality
 		if (error == NO_ERROR)
-			return "symbol.noSuchSymbol:[symbol.field,\""+desc+"\","+currentCodeBlockForReport()+"]";
+			return translatable("symbol.noSuchSymbol", translatable("symbol.field"), desc, currentCodeBlockForReport());
 		return error;
 	}
 
-	private String fcResolveInnerClass(CharList desc, ClassNode owner, int fieldNamePos, String firstError, boolean allowClassExpr) {
+	private IText fcResolveInnerClass(CharList desc, ClassNode owner, int fieldNamePos, IText firstError, boolean allowClassExpr) {
 		while (true) {
 			// capture last error to tmpErrorMsg
 			enableErrorCapture();
 			if (!canAccessType(owner, true)) {
-				if (firstError.isEmpty())
-					firstError = getCapturedError().toString();
+				if (firstError == NO_ERROR)
+					firstError = getCapturedError();
 			}
 			disableErrorCapture();
 
 			// priority field than InnerClass
-			String error = resolveFieldChain(owner, null, desc, fieldNamePos);
+			IText error = resolveFieldChain(owner, null, desc, fieldNamePos);
 			if (error == null) return null;
 
-			if (firstError.isEmpty())
+			if (firstError == NO_ERROR)
 				firstError = error;
 
 			InnerClasses.Item innerClass = compiler.getInnerClassInfo(owner).get("!"+desc.substring(fieldNamePos));
@@ -737,10 +775,10 @@ public class CompileContext {
 					frStart = owner;
 					frChains.clear();
 					frFinalType = null;
-					return "";
+					return NO_ERROR;
 				}
-				if (firstError.isEmpty())
-					firstError = "symbol.expression:[\""+desc+"\"]";
+				if (firstError == NO_ERROR)
+					firstError = translatable("symbol.expression", desc);
 			}
 		}
 
@@ -756,10 +794,10 @@ public class CompileContext {
 	 * @param fieldType 起始类型的类型变量，如果没有ParameterizedType可以不提供
 	 * @param desc a/b/c格式的字段访问字符串
 	 */
-	public final String resolveFieldChain(ClassNode owner, @Nullable IType fieldType, CharList desc) { return resolveFieldChain(owner, fieldType, desc, 0); }
+	public final IText resolveFieldChain(ClassNode owner, @Nullable IType fieldType, CharList desc) { return resolveFieldChain(owner, fieldType, desc, 0); }
 
-	private String resolveFieldChain(ClassNode owner, IType fieldType, CharList desc, int fieldNamePos) {
-		frStart = owner;
+	private IText resolveFieldChain(ClassNode owner, IType fieldType, CharList desc, int fieldNamePos) {
+		frStart = null;
 		List<FieldNode> result = frChains; result.clear();
 
 		int i = desc.indexOf("/", fieldNamePos);
@@ -768,37 +806,33 @@ public class CompileContext {
 
 			FieldNode field;
 			block: {
-				var fields = getFieldList(owner, name);
+				var fields = compiler.getFieldList(owner, name);
 				if (fields != ComponentList.NOT_FOUND) {
 					var fr = fields.findField(this, 0);
 					if (fr.error != null) return fr.error;
 
+					owner = fr.owner;
 					field = fr.field;
+					if (frStart == null)
+						frStart = owner;
 					break block;
 				}
-				return "symbol.noSuchSymbol:[symbol.field,\""+name+"\",[symbol.type,\" "+owner.name()+"\"],"+reportSimilarField(owner, name)+"]";
+				return translatable("symbol.noSuchSymbol", translatable("symbol.field"), name, IText.empty().append(translatable("symbol.type")).append(" ").append(literal(owner))).append(reportSimilarField(owner, name));
 			}
 
-			Signature cSign = owner.getAttribute(owner.cp(), Attribute.SIGNATURE);
-			block:{
-			if (cSign != null) {
-				Signature fSign = field.getAttribute(owner.cp(), Attribute.SIGNATURE);
-				if (fSign != null) {
-					Map<String, List<IType>> tpBounds = cSign.typeVariables;
-					Map<String, IType> knownTps;
+			Signature fSign = field.getAttribute(owner, Attribute.SIGNATURE);
+			if (fSign != null) {
+				if (fieldType instanceof CompoundType wt) fieldType = wt.getBound();
 
-					if (fieldType instanceof ParameterizedType generic) {
-						knownTps = Inferrer.createSubstitutionMap(tpBounds, generic.typeParameters);
-					} else {
-						knownTps = new HashMap<>(cSign.typeVariables.size());
-						Inferrer.substituteMissingTypeParametersToBound(tpBounds, knownTps);
-					}
+				Signature cSign;
+				Map<TypeVariableDeclaration, IType> substitution =
+						fieldType instanceof ParameterizedType generic && (cSign = owner.getAttribute(Attribute.SIGNATURE)) != null
+						? Inferrer.createSubstitutionMap(cSign.typeVariables, generic.typeParameters)
+						: Collections.emptyMap();
 
-					fieldType = Inferrer.substituteTypeVariables(fSign.values.get(0), knownTps, tpBounds);
-					break block;
-				}
-			}
-			fieldType = field.fieldType();
+				fieldType = Inferrer.substituteTypeVariables(fSign.values.get(0), substitution);
+			} else {
+				fieldType = field.fieldType();
 			}
 			result.add(field);
 
@@ -816,11 +850,11 @@ public class CompileContext {
 					return null;
 				}
 				// 不能解引用基本类型
-				return "symbol.derefPrimitive:"+type;
+				return translatable("symbol.derefPrimitive", type);
 			}
 
 			owner = resolve(type);
-			if (owner == null) return "symbol.noSuchClass:".concat(type.toString());
+			if (owner == null) return translatable("symbol.noSuchClass", type);
 		}
 	}
 
@@ -880,7 +914,7 @@ public class CompileContext {
 	@NotNull
 	public final Function<String, Import> getFieldDFI(ClassNode info, Variable ref, Function<String, Import> prev) {
 		return name -> {
-			var cl = getFieldList(info, name);
+			var cl = compiler.getFieldList(info, name);
 			if (cl != ComponentList.NOT_FOUND) {
 				FieldResult result = cl.findField(this, ref == null ? ComponentList.IN_STATIC : 0);
 				if (result.error == null) return Import.virtualCall(info, result.field.name(), ref == null ? null : new LocalVariable(ref));
@@ -980,7 +1014,8 @@ public class CompileContext {
 		var exceptions = (ClassListAttribute) method.getAttribute("Exceptions");
 		if (exceptions != null) {
 			if (type.kind() == 0) {
-				var parents = getHierarchyList(compiler.resolve(type.owner()));
+				ClassNode info = compiler.resolve(type.owner());
+				var parents = compiler.getHierarchyList(info);
 				for (String s : exceptions.value) {
 					if (parents.containsKey(s)) return;
 				}
@@ -1002,8 +1037,8 @@ public class CompileContext {
 	//endregion
 	//region 类型转换和推断
 	public MethodResult inferGeneric(IType typeInst, MethodNode method) {
-		List<IType> resolvedGeneric = inferGeneric(typeInst, method.owner());
-		return inferrer.getGenericParameters(compiler.resolve(method.owner()), method,
+		List<IType> resolvedGeneric = compiler.inferGeneric(typeInst, method.owner());
+		return inferrer.getSubstitutedParameters(compiler.resolve(method.owner()), method,
 				resolvedGeneric == null ? Type.klass(method.owner()) : new ParameterizedType(method.owner(), resolvedGeneric));
 	}
 	/**
@@ -1070,7 +1105,7 @@ public class CompileContext {
 	 *   <li>{@link TypeCast.Cast#type}：转换类型代码</li>
 	 *   <li>{@link TypeCast.Cast#distance}：转换代价（越小越优先）</li>
 	 *   <li>{@link TypeCast.Cast#write(roj.asm.insn.CodeWriter)}：生成字节码的方法</li>
-	 *   <li>{@link TypeCast.Cast#getType1()}：获取泛型目标类型（用于类型推断）</li>
+	 *   <li>{@link TypeCast.Cast#getTarget()}：获取泛型目标类型（用于类型推断）</li>
 	 * </ul>
 	 *
 	 * @see TypeCast.Cast 查看转换描述对象的完整结构
@@ -1080,24 +1115,6 @@ public class CompileContext {
 		if (cast.type < lowest_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
 		return cast.intern();
 	}
-
-	/**
-	 * @see LavaCompiler#inferGeneric(IType, String)
-	 */
-	@Nullable
-	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {return compiler.inferGeneric(typeInst, targetType, tmpMap1);}
-	/**
-	 * @see LavaCompiler#instanceOf(String, String)
-	 */
-	public final boolean instanceOf(String testClass, String instClass) {return compiler.instanceOf(testClass, instClass);}
-	/**
-	 * @see LavaCompiler#getCommonAncestor(IType, IType)
-	 */
-	public final IType getCommonParent(IType a, IType b) {return compiler.getCommonAncestor(a, b);}
-	/**
-	 * @see LavaCompiler#getCommonAncestor(ClassNode, ClassNode)
-	 */
-	public final String getCommonParent(ClassNode infoA, ClassNode infoB) {return compiler.getCommonAncestor(infoA, infoB);}
 	//endregion
 
 	// Cast | Expr
@@ -1105,7 +1122,7 @@ public class CompileContext {
 		var rType = expr.type();
 
 		var allowImplicitCast = expr.isConstant() && toType.getActualType() == Type.CHAR;
-		var cast = castTo(rType, toType, -8);
+		var cast = caster.checkCast(rType, toType).intern();
 		if (cast.type < 0) {
 			if (allowImplicitCast || !rType.equals(rType = expr.minType())) {
 				cast = castTo(rType, toType, allowImplicitCast ? TypeCast.IMPLICIT : 0);
@@ -1153,15 +1170,15 @@ public class CompileContext {
 		var cast = TypeCast.Cast.IDENTITY;
 
 		if (type.kind() == IType.CAPTURED_WILDCARD) {
-			var newType = ((WildcardType) type).getBound();
+			var newType = ((CompoundType) type).getBound();
 			// FIXME 在这里需要进行类型擦除吗，还是仅仅这样checkcast
 			cast = caster.checkCast(type, newType);
 		}
 
 		// 将菱形泛型，例如 new ArrayList<>()，擦除到边界
-		if (type instanceof ParameterizedType g && g.typeParameters.size() == 1 && g.typeParameters.get(0) == WildcardType.anyGeneric) {
+		if (type instanceof ParameterizedType g && g.typeParameters.size() == 1 && g.typeParameters.get(0) == Types.anyGeneric) {
 			ClassNode info = compiler.resolve(type.owner());
-			g.typeParameters = info.getAttribute(info.cp, Attribute.SIGNATURE).getBounds();
+			g.typeParameters = info.getAttribute(Attribute.SIGNATURE).getBounds();
 		}
 
 		expr.write(cw, cast);
@@ -1178,7 +1195,7 @@ public class CompileContext {
 	 * @return 注解对象
 	 */
 	public Annotation getAnnotation(ClassNode type, Attributed node, String annotation, boolean rt) {
-		return Annotation.find(Annotations.getAnnotations(type.cp(), node, rt), annotation);
+		return Annotation.find(Annotations.getAnnotations(type, node, rt), annotation);
 	}
 
 	private static final IntMap<String> EMPTY = new IntMap<>(0);
@@ -1198,7 +1215,7 @@ public class CompileContext {
 	 * @see #parseDefaultArgument(String) 反序列化方法
 	 */
 	public IntMap<String> getDefaultArguments(ClassNode klass, MethodNode method) {
-		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.ID);
+		MethodDefault attr = method.getAttribute(klass, MethodDefault.ID);
 		return attr != null ? attr.defaultValue : EMPTY;
 	}
 	/**
@@ -1300,7 +1317,7 @@ public class CompileContext {
 			}
 		}
 
-		var cv = field.getAttribute(klass.cp(), Attribute.ConstantValue);
+		var cv = field.getAttribute(klass, Attribute.ConstantValue);
 		if (cv == null) return null;
 
 		var c = switch (cv.c.type()) {
@@ -1368,7 +1385,7 @@ public class CompileContext {
 	// 暂存Switch的标签
 	public final ArrayList<String> tmpList2 = new ArrayList<>();
 	// 注解暂存
-	public final ArrayList<AnnotationPrimer> tmpAnnotations = new ArrayList<>();
+	public final ArrayList<AnnotationBuilder> tmpAnnotations = new ArrayList<>();
 	// S2实现检查临时, 注解检查临时, 模块重复检查临时
 	public final HashSet<String> tmpSet = new HashSet<>();
 	public HashSet<String> getTmpSet() {tmpSet.clear();return tmpSet;}

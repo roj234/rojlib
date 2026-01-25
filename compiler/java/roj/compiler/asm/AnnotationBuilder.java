@@ -26,16 +26,16 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
-public final class AnnotationPrimer extends Annotation {
+public final class AnnotationBuilder extends Annotation {
 	public int pos;
 	public boolean valueOnly;
 
-	public AnnotationPrimer(String type, int pos) {
+	public AnnotationBuilder(String type, int pos) {
 		super(type);
 		this.pos = pos - 1;
 	}
 
-	public void newEntry(CompileUnit file, String key) throws ParseException {
+	public void addMember(CompileUnit file, String key) throws ParseException {
 		Object expr;
 
 		var wr = file.context().tokenizer;
@@ -49,7 +49,7 @@ public final class AnnotationPrimer extends Annotation {
 			if (wr.next().type() == LavaTokenizer.at) {
 				wr.skip();
 
-				var list = new ArrayList<AnnotationPrimer>();
+				var list = new ArrayList<AnnotationBuilder>();
 				while (true) {
 					file.readAnnotations(list);
 					if (!wr.nextIf(LavaTokenizer.comma)) break;
@@ -84,10 +84,10 @@ public final class AnnotationPrimer extends Annotation {
 		((HashMap<String,?>) properties).put(key, Helpers.cast(expr));
 	}
 
-	public void setValues(Map<String, ConfigValue> values) {this.properties = values;}
+	public void setProperties(Map<String, ConfigValue> p) {this.properties = p;}
 
 	@Nullable
-	public static ConfigValue toAnnVal(CompileContext ctx, Expr node, IType type) {
+	public static ConfigValue evaluate(CompileContext ctx, Expr node, IType type) {
 		if (node instanceof NewArray def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
@@ -112,39 +112,39 @@ public final class AnnotationPrimer extends Annotation {
 		var r = ctx.castTo(ftype, type, 0);
 		if (r.type < 0) return null;
 
-		var val = toAnnVal(node.constVal(), type);
+		var val = serialize(node.constVal(), type);
 		return tryAutoArray ? new ArrayVal(Collections.singletonList(val)) : val;
 	}
-	private static ConfigValue toAnnVal(Object o, IType type) {
+	private static ConfigValue serialize(Object o, IType type) {
 		if (o instanceof Object[] arr) {
 			type = type.clone();
 			type.setArrayDim(type.array()-1);
 			for (int i = 0; i < arr.length; i++) {
-				arr[i] = toAnnVal(arr[i], type);
+				arr[i] = serialize(arr[i], type);
 			}
 			return new ArrayVal(Helpers.cast(Arrays.asList(arr)));
 		}
 		if (o instanceof AnnVal x) return x; // AnnValEnum | AnnValClass
-		if (o instanceof ConfigValue a) return castPrimitive(a, type);
+		if (o instanceof ConfigValue a) return coerceConstantValue(a, type);
 		if (o instanceof String) return ConfigValue.valueOf(o.toString());
 		if (o instanceof IType type1) return AnnVal.valueOf(type1.rawType());
 		if (o instanceof Boolean b) return ConfigValue.valueOf(b);
 		throw new UnsupportedOperationException("未预料的常量类型:"+o);
 	}
 
-	public static ConfigValue castPrimitive(ConfigValue entry, IType type) {
-		int sourceType = Type.getSort(entry.dataType());
-		int targetType = Type.getSort(type.getActualType());
-		if (sourceType == targetType) return entry;
-		return switch (targetType) {
-			default -> entry;
-			case Type.SORT_BYTE -> ConfigValue.valueOf((byte) entry.asInt());
-			case Type.SORT_CHAR -> ConfigValue.valueOf((char) entry.asInt());
-			case Type.SORT_SHORT -> ConfigValue.valueOf((short) entry.asInt());
-			case Type.SORT_INT -> ConfigValue.valueOf(entry.asInt());
-			case Type.SORT_LONG -> ConfigValue.valueOf(entry.asLong());
-			case Type.SORT_FLOAT -> ConfigValue.valueOf(entry.asFloat());
-			case Type.SORT_DOUBLE -> ConfigValue.valueOf(entry.asDouble());
+	public static ConfigValue coerceConstantValue(ConfigValue value, IType targetType) {
+		int sourceSort = Type.getSort(value.dataType());
+		int targetSort = Type.getSort(targetType.getActualType());
+		if (sourceSort == targetSort) return value;
+		return switch (targetSort) {
+			default -> value;
+			case Type.SORT_BYTE -> ConfigValue.valueOf((byte) value.asInt());
+			case Type.SORT_CHAR -> ConfigValue.valueOf((char) value.asInt());
+			case Type.SORT_SHORT -> ConfigValue.valueOf((short) value.asInt());
+			case Type.SORT_INT -> ConfigValue.valueOf(value.asInt());
+			case Type.SORT_LONG -> ConfigValue.valueOf(value.asLong());
+			case Type.SORT_FLOAT -> ConfigValue.valueOf(value.asFloat());
+			case Type.SORT_DOUBLE -> ConfigValue.valueOf(value.asDouble());
 		};
 	}
 }

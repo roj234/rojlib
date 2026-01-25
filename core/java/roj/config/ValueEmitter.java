@@ -25,7 +25,7 @@ public interface ValueEmitter extends Closeable {
 	default void emitTimestamp(long millis) { emit(millis); }
 	default void emitTimestamp(long seconds, int nanos) {emitTimestamp(seconds * 1000 + nanos / 1_000_000);}
 
-	default boolean supportArray() {return false;}
+	default boolean allowArray() {return false;}
 	default void emit(byte[] array) {
 		emitList(array.length);
 		for (byte b : array) emit(b);

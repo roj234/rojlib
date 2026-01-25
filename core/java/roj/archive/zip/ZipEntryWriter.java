@@ -332,7 +332,7 @@ final class ZipEntryWriter extends MBOutputStream {
 			if (!stream) throw new IllegalStateException("EXT record on non-stream entry");
 
 			writeEXT(f, buf, entry);
-			pos += buf.rIndex;
+			pos += buf.readableBytes();
 		}
 
 		if (updateLOC) {
@@ -390,7 +390,7 @@ final class ZipEntryWriter extends MBOutputStream {
 		}
 		buf.writeToStream(out);
 	}
-	static void writeCEN(ByteList buf, ZipEntry entry) {
+	static void writeCEN(ByteList buf, ZipEntry entry, long offsetDelta) {
 		int extLenOff = buf.wIndex() + 30;
 		buf.putInt(HEADER_CEN)
 		   .putShortLE(PKWARE_SPEC_VERSION | HOST_SYSTEM_ID[(entry.flags >>> 23) & 3])
@@ -404,10 +404,10 @@ final class ZipEntryWriter extends MBOutputStream {
 		   .putShortLE(0) // comment
 		   .putShortLE(0) // disk
 		   .putShortLE((entry.flags >>> 20) & 7).putIntLE(entry.attributes)
-		   .putIntLE((int) entry.startPos())
+		   .putIntLE((int) (entry.startPos() + offsetDelta))
 		   .put(entry.nameBytes);
 		int extOff = buf.wIndex();
-		entry.writeCENExtra(buf, extLenOff);
+		entry.writeCENExtra(buf, extLenOff, offsetDelta);
 		buf.setShortLE(extLenOff, buf.wIndex()-extOff);
 	}
 	static void writeEND(ByteList buf, long cenOffset, long cenLength, int cenCount, byte[] comment) {

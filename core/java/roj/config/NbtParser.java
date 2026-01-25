@@ -30,8 +30,7 @@ public final class NbtParser implements Parser {
 		char n = in.readChar();
 		if (n != 0) throw new IOException("根节点不应该有名称");
 
-		if (emitter.supportArray()) parseSA(in, type, emitter);
-		else parse(in, type, emitter);
+		parse(in, type, emitter);
 	}
 
 	private static void parse(DataInput in, byte type, ValueEmitter cc) throws IOException {
@@ -45,9 +44,15 @@ public final class NbtParser implements Parser {
 			case DOUBLE -> cc.emit(in.readDouble());
 			case BYTE_ARRAY -> {
 				int len = in.readInt();
-				cc.emitList(len);
-				for (int i = 0; i < len; i++) cc.emit(in.readByte());
-				cc.pop();
+				if (cc.allowArray()) {
+					var arr = ArrayUtil.newUninitializedByteArray(len);
+					for (int i = 0; i < arr.length; i++) arr[i] = in.readByte();
+					cc.emit(arr);
+				} else {
+					cc.emitList(len);
+					for (int i = 0; i < len; i++) cc.emit(in.readByte());
+					cc.pop();
+				}
 			}
 			case STRING -> cc.emit(in.readUTF());
 			case LIST -> {
@@ -69,61 +74,27 @@ public final class NbtParser implements Parser {
 			}
 			case INT_ARRAY -> {
 				int len = in.readInt();
-				cc.emitList(len);
-				for (int i = 0; i < len; i++) cc.emit(in.readInt());
-				cc.pop();
-			}
-			case LONG_ARRAY -> {
-				int len = in.readInt();
-				for (int i = 0; i < len; i++) cc.emit(in.readLong());
-				cc.pop();
-			}
-		}
-	}
-	private static void parseSA(DataInput in, byte type, ValueEmitter cc) throws IOException {
-		switch (type) {
-			default -> throw new IOException("Corrupted NBT");
-			case BYTE -> cc.emit(in.readByte());
-			case SHORT -> cc.emit(in.readShort());
-			case INT -> cc.emit(in.readInt());
-			case LONG -> cc.emit(in.readLong());
-			case FLOAT -> cc.emit(in.readFloat());
-			case DOUBLE -> cc.emit(in.readDouble());
-			case BYTE_ARRAY -> {
-				int length = in.readInt();
-				var arr = ArrayUtil.newUninitializedByteArray(length);
-				in.readFully(arr);
-				cc.emit(arr);
-			}
-			case STRING -> cc.emit(in.readUTF());
-			case LIST -> {
-				type = in.readByte();
-				int len = in.readInt();
-				cc.emitList(len);
-				while (len-- > 0) parseSA(in, type, cc);
-				cc.pop();
-			}
-			case COMPOUND -> {
-				cc.emitMap();
-				while (true) {
-					type = in.readByte();
-					if (type == 0) break;
-					cc.emitKey(in.readUTF());
-					parseSA(in, type, cc);
+				if (cc.allowArray()) {
+					var arr = ArrayUtil.newUninitializedIntArray(len);
+					for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
+					cc.emit(arr);
+				} else {
+					cc.emitList(len);
+					for (int i = 0; i < len; i++) cc.emit(in.readInt());
+					cc.pop();
 				}
-				cc.pop();
-			}
-			case INT_ARRAY -> {
-				int length = in.readInt();
-				var arr = ArrayUtil.newUninitializedIntArray(length);
-				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
-				cc.emit(arr);
 			}
 			case LONG_ARRAY -> {
-				int length = in.readInt();
-				var arr = ArrayUtil.newUninitializedLongArray(length);
-				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
-				cc.emit(arr);
+				int len = in.readInt();
+				if (cc.allowArray()) {
+					var arr = ArrayUtil.newUninitializedLongArray(len);
+					for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
+					cc.emit(arr);
+				} else {
+					cc.emitList(len);
+					for (int i = 0; i < len; i++) cc.emit(in.readLong());
+					cc.pop();
+				}
 			}
 		}
 	}

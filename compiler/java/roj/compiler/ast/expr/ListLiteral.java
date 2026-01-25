@@ -5,8 +5,8 @@ import roj.asm.type.IType;
 import roj.asm.type.ParameterizedType;
 import roj.asm.type.Type;
 import roj.compiler.CompileContext;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
@@ -36,12 +36,12 @@ final class ListLiteral extends Expr {
 			if (!node.isConstant()) allIsConstant = false;
 
 			if (vType == null) vType = node.type();
-			else vType = ctx.getCommonParent(vType, node.type());
+			else vType = ctx.compiler.getCommonAncestor(vType, node.type());
 		}
 
 		type = new ParameterizedType("java/util/List", 0, ParameterizedType.NO_WILDCARD);
 		if (vType == null) {
-			type.addChild(WildcardType.anyType);
+			type.addChild(Types.anyType);
 		} else {
 			var wrapper = Type.getWrapper(vType);
 			type.addChild(wrapper == null ? vType : wrapper);

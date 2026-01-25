@@ -93,7 +93,7 @@ sealed class MappingContext implements ObjectReader<Object> permits ReentrantObj
 	public final void emit(double i) {curr.read(this, i);}
 	public final void emit(String s) {curr.read(this, s);}
 	public final void emitNull() {curr.read(this, (Object) null);}
-	public final boolean supportArray() {return true;}
+	public final boolean allowArray() {return true;}
 	public final void emit(byte[] array) {curr.read(this, array);}
 	public final void emit(int[] array) {curr.read(this, array);}
 	public final void emit(long[] array) {curr.read(this, array);}

@@ -85,7 +85,7 @@ public final class NbtEncoder implements ValueEmitter {
 		if (!XNbt) throw new NullPointerException("NBT不支持Null (请使用XNBT)");
 		onValue(X_NULL);
 	}
-	public final boolean supportArray() {return true;}
+	public final boolean allowArray() {return true;}
 	public final void emit(byte[] array) {
 		onValue(BYTE_ARRAY);
 		out.writeInt(array.length);

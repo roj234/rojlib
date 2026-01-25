@@ -12,7 +12,6 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.ParamNameMapper;
 import roj.compiler.api.Compiler;
-import roj.compiler.asm.LPSignature;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
@@ -30,6 +29,7 @@ import roj.compiler.runtime.LambdaCompiler;
 import roj.compiler.test.ComparisonChainPlugin;
 import roj.compiler.test.TestPlugin;
 import roj.compiler.test.TimeUnitPlugin;
+import roj.compiler.types.SignatureBuilder;
 import roj.reflect.Reflection;
 import roj.reflect.Sandbox;
 import roj.text.ParseException;
@@ -103,8 +103,9 @@ public class LambdaLinker implements LambdaCompiler {
 		unit.addInterface(genericType.owner());
 
 		if (genericType.kind() != IType.SIMPLE_TYPE) {
-			var sign = new LPSignature(Signature.CLASS);
-			sign._impl(genericType);
+			var sign = new SignatureBuilder(Signature.CLASS);
+			sign.set(1, genericType);
+			sign.applyTypeParam(unit);
 			unit.addAttribute(sign);
 		}
 
@@ -127,13 +128,13 @@ public class LambdaLinker implements LambdaCompiler {
 			var typeVariables = node.getSignature().typeVariables;
 			var typeParameterMap = Inferrer.createSubstitutionMap(typeVariables, parameterizedType.typeParameters);
 
-			Signature lambdaMethodSign = lambdaMethod.getAttribute(node.cp, Attribute.SIGNATURE);
+			Signature lambdaMethodSign = lambdaMethod.getAttribute(node, Attribute.SIGNATURE);
 			if (lambdaMethodSign != null) {
 				List<Type> parameters = impl.parameters();
 				List<IType> values = lambdaMethodSign.values;
 				for (int j = 0; ;) {
 					IType value = values.get(j++);
-					Type e = Inferrer.substituteTypeVariables(value, typeParameterMap, typeVariables).rawType();
+					Type e = Inferrer.substituteTypeVariables(value, typeParameterMap).rawType();
 					if (j == values.size()) {
 						impl.setReturnType(e);
 						break;

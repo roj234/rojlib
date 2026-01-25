@@ -54,8 +54,8 @@ public class ClassNode implements ClassDefinition {
 	/**
 	 * 全量解析（包括属性），并清空常量池
 	 * 如果你的目的是压缩常量池，请用{@link roj.asmx.TransformUtil#compress(ClassNode)}而不是这个方法
-	 * * 它的效果甚至更好！
-	 *
+	 * * 该方法的效果甚至更好！
+	 * <p>
 	 * 这个方法很浪费内存，你只应该在特殊的时候使用它
 	 */
 	public static ClassNode parseAll(DynByteBuf buf) {
@@ -80,7 +80,7 @@ public class ClassNode implements ClassDefinition {
 		while (len-- > 0) {
 			var field = new FieldNode(buf.readShort(), ((CstUTF) cp.resolve(buf)).str(), ((CstUTF) cp.resolve(buf)).str());
 			fields.add(field);
-			pattr(cp, buf, field, Signature.FIELD);
+			pattr(klass, buf, field, Signature.FIELD);
 		}
 
 		len = buf.readUnsignedShort();
@@ -89,10 +89,10 @@ public class ClassNode implements ClassDefinition {
 		while (len-- > 0) {
 			var method = new MethodNode(buf.readShort(), klass.name(), ((CstUTF) cp.resolve(buf)).str(), ((CstUTF) cp.resolve(buf)).str());
 			methods.add(method);
-			pattr(cp, buf, method, Signature.METHOD);
+			pattr(klass, buf, method, Signature.METHOD);
 		}
 
-		pattr(cp, buf, klass, Signature.CLASS);
+		pattr(klass, buf, klass, Signature.CLASS);
 
 		// 释放常量占用的空间
 		klass.cp.clear();
@@ -106,7 +106,7 @@ public class ClassNode implements ClassDefinition {
 	 * 另外的好处是，所有的引用都只有一份，所以你可以直接修改{@link ConstantPool 常量池}里的常量，而不需要迭代每一个InsnNode
 	 *
 	 * @param buf 包含类文件数据的字节缓冲区（会移动读指针）
-	 * @see Attributed#getAttribute(ConstantPool, TypedKey) 按需解析属性
+	 * @see Attributed#getAttribute(ClassNode, TypedKey) 按需解析属性
 	 * @see #parseAll(DynByteBuf)
 	 * @return 包含基础结构的ClassNode对象
 	 */
@@ -160,10 +160,11 @@ public class ClassNode implements ClassDefinition {
 		return klass;
 	}
 
-	private static void pattr(ConstantPool pool, DynByteBuf buf, Attributed node, int position) {
+	private static void pattr(ClassNode cn, DynByteBuf buf, Attributed node, int position) {
 		int len = buf.readUnsignedShort();
 		if (len == 0) return;
 
+		var pool = cn.cp;
 		var attributes = node.attributes();
 		attributes.ensureCapacity(len);
 
@@ -175,7 +176,7 @@ public class ClassNode implements ClassDefinition {
 			int end = buf.rIndex + length;
 			buf.wIndex(end);
 
-			var parsedAttribute = Attribute.parse(node, pool, name, buf, position);
+			var parsedAttribute = Attribute.parse(node, pool, cn, name, buf, position);
 			attributes._add(parsedAttribute == null ? new UnparsedAttribute(name, buf.slice(length)) : parsedAttribute);
 
 			// 忽略过长的属性.
@@ -231,7 +232,12 @@ public class ClassNode implements ClassDefinition {
 	}
 
 	@Override
-	public <T extends Attribute> T getAttribute(ConstantPool cp, @MagicConstant(valuesFromClass = Attribute.class) TypedKey<T> type) {return Attribute.parseSingle(this,this.cp,type,attributes,Signature.CLASS);}
+	public <T extends Attribute> T getAttribute(ClassNode node, @MagicConstant(valuesFromClass = Attribute.class) TypedKey<T> type) {
+		if (node != null && node != this) throw new IllegalArgumentException("node != this");
+		return Attribute.parseSingle(this,this,type,attributes,Signature.CLASS);
+	}
+	public <T extends Attribute> T getAttribute(TypedKey<T> type) {return getAttribute(this, type);}
+
 	public AttributeList attributes() {return attributes == null ? attributes = new AttributeList() : attributes;}
 	public AttributeList attributesNullable() {return attributes;}
 
@@ -245,11 +251,9 @@ public class ClassNode implements ClassDefinition {
 	}
 
 	public List<InnerClasses.Item> getInnerClasses() {
-		var ic = getAttribute(cp, Attribute.InnerClasses);
+		var ic = getAttribute(Attribute.InnerClasses);
 		return ic == null ? Collections.emptyList() : ic.classes;
 	}
-
-	@Override @NotNull public ConstantPool cp() { return cp; }
 
 	@Override
 	public DynByteBuf toByteArray(DynByteBuf w) {
@@ -304,28 +308,28 @@ public class ClassNode implements ClassDefinition {
 	}
 
 	public final void parsed() {
-		List<MethodNode> mm = methods;
-		for (int i = 0; i < mm.size(); i++) mm.get(i).parsed(cp);
-		List<FieldNode> ff = fields;
-		for (int i = 0; i < ff.size(); i++) ff.get(i).parsed(cp);
-
 		AttributeList list = attributes;
-		if (list != null) Attribute.parseAll(this,cp,list,Signature.CLASS);
+		if (list != null) Attribute.parseAll(this, this, list,Signature.CLASS);
+
+		List<MethodNode> mm = methods;
+		for (int i = 0; i < mm.size(); i++) mm.get(i).parsed(this);
+		List<FieldNode> ff = fields;
+		for (int i = 0; i < ff.size(); i++) ff.get(i).parsed(this);
 
 		cp.clear();
 	}
 	public final void unparsed() {
-		List<MethodNode> mm = methods;
-		for (int i = 0; i < mm.size(); i++) mm.get(i).unparsed(cp);
-		List<FieldNode> ff = fields;
-		for (int i = 0; i < ff.size(); i++) ff.get(i).unparsed(cp);
-
 		AttributeList list = attributes;
 		if (list != null) {
 			var w = AsmCache.buf();
 			for (int i = 0; i < list.size(); i++) list.set(i, UnparsedAttribute.serialize(cp, w, list.get(i)));
 			AsmCache.buf(w);
 		}
+
+		List<MethodNode> mm = methods;
+		for (int i = 0; i < mm.size(); i++) mm.get(i).unparsed(cp);
+		List<FieldNode> ff = fields;
+		for (int i = 0; i < ff.size(); i++) ff.get(i).unparsed(cp);
 	}
 
 	public final String name() {return nameCst.value().str();}
@@ -518,7 +522,7 @@ public class ClassNode implements ClassDefinition {
 
 	@NotNull
 	public final Signature getSignature() {
-		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+		Signature signature = getAttribute(Attribute.SIGNATURE);
 		if (signature == null) {
 			signature = new Signature(Signature.CLASS);
 			signature.values = Flow.of(parentCst).append(Flow.of(interfaces)).map(type -> type.value().str().equals("java/lang/Object") ? Signature.objectBound() : Type.klass(type.value().str())).toList();
@@ -532,9 +536,9 @@ public class ClassNode implements ClassDefinition {
 	public String toString() {
 		CharList sb = new CharList(1000);
 
-		var _a = getAttribute(cp, Attribute.VisibleAnnotations);
+		var _a = getAttribute(Attribute.VisibleAnnotations);
 		if (_a != null) _a.toString(sb, 0);
-		_a = getAttribute(cp, Attribute.InvisibleAnnotations);
+		_a = getAttribute(Attribute.InvisibleAnnotations);
 		if (_a != null) _a.toString(sb, 0);
 
 		int acc = modifier;
@@ -542,17 +546,17 @@ public class ClassNode implements ClassDefinition {
 		else if ((acc&ACC_INTERFACE) != 0) acc &= ~(ACC_ABSTRACT);
 		showModifiers(acc, ACC_SHOW_CLASS, sb);
 
-		var _seal = getAttribute(cp, Attribute.PermittedSubclasses);
+		var _seal = getAttribute(Attribute.PermittedSubclasses);
 		if (_seal != null) sb.append("sealed ");
 
-		var _module = getAttribute(cp, Attribute.Module);
+		var _module = getAttribute(Attribute.Module);
 		if (_module != null) sb.append(_module.self.toString());
 		else {
 			if ((acc&(ACC_ENUM|ACC_INTERFACE|ACC_MODULE|ACC_ANNOTATION)) == 0) sb.append("class ");
 			TypeHelper.toStringOptionalPackage(sb, name());
 		}
 
-		var _sign = getAttribute(cp, Attribute.SIGNATURE);
+		var _sign = getAttribute(Attribute.SIGNATURE);
 		if (_sign != null) sb.append(_sign);
 		else {
 			String parent = parent();

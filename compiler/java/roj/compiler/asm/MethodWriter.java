@@ -150,19 +150,19 @@ public class MethodWriter extends CodeWriter {
 	// 这个pos!=0其实是筛掉了lambda
 	public void load(Variable v) {
 		if (v.slot >= 0 && v.pos != 0) varLoad(v.type.rawType(), v.slot);
-		else addSegment(new LazyLoadStore(v, false));
+		else addSegment(new VariableAccess(v, false));
 	}
 	public void store(Variable v) {
 		if (v.slot >= 0 && v.pos != 0) varStore(v.type.rawType(), v.slot);
-		else addSegment(new LazyLoadStore(v, true));
+		else addSegment(new VariableAccess(v, true));
 	}
 	public void iinc(Variable v, int delta) {
 		if (v.slot >= 0 && v.pos != 0) iinc(v.slot, delta);
-		else addSegment(new LazyIINC(v, delta));
+		else addSegment(new VariableIncr(v, delta));
 	}
 
 	@Override
-	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new OptimizedJumpTo(code, target)); }
+	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new SmartJumpTo(code, target)); }
 
 	// 必须，否则第一个segment的标签都是rawLabel
 	@Override
@@ -246,7 +246,7 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	/**
-	 * @see OptimizedJumpTo#write(CodeWriter, int) 用途
+	 * @see SmartJumpTo#write(CodeWriter, int) 用途
 	 */
 	List<Segment> getSegments() {return segments;}
 

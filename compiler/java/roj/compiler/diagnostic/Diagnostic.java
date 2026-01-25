@@ -18,17 +18,17 @@ public class Diagnostic {
 	private final ClassDefinition source;
 	private final Kind kind;
 	private final String code;
-	private final Object[] args;
+	private final IText message;
 	private final int offset, length;
 
 	private int lineNumber, columnNumber;
 	private String line;
 
-	public Diagnostic(ClassDefinition source, Kind kind, int wordStart, int wordEnd, String code, Object[] args) {
+	public Diagnostic(ClassDefinition source, Kind kind, int wordStart, int wordEnd, String code, IText message) {
 		this.source = source;
 		this.kind = kind;
 		this.code = code;
-		this.args = args;
+		this.message = message;
 
 		this.offset = wordStart;
 		this.length = wordEnd-wordStart;
@@ -41,16 +41,8 @@ public class Diagnostic {
 	public int getStartPosition() { return offset; }
 	public int getEndPosition() { return offset+length; }
 
-	public String getCode() { return code; }
-	public Object[] getArgs_original() { return args; }
-	public Object[] getArgs() {
-		Object[] clone = args.clone();
-		for (int i = 0; i < clone.length; i++) {
-			Object o = clone[i];
-			if (o instanceof ClassDefinition t) clone[i] = t.name().replace('/', '.');
-		}
-		return clone;
-	}
+	public String getCode() {return code;}
+	public IText getMessage() {return message;}
 
 	public int getLineNumber() { initLines(); return lineNumber; }
 	public int getColumnNumber() { initLines(); return columnNumber; }
@@ -87,7 +79,8 @@ public class Diagnostic {
 
 	@Nls
 	public String getMessage(Locale locale) {
-		if (!locale.equals(Locale.SIMPLIFIED_CHINESE)) return code;
-		return TranslatableString.of(code, args).translate(LavaTokenizer.i18n, new CharList()).toStringAndFree();
+		CharList buf = new CharList();
+		message.appendTo(buf, LavaTokenizer.i18n);
+		return buf.toStringAndFree();
 	}
 }

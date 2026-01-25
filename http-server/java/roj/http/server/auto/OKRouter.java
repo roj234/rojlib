@@ -9,7 +9,6 @@ import roj.asm.annotation.ArrayVal;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ParameterAnnotations;
-import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstString;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.CodeWriter;
@@ -204,7 +203,7 @@ public final class OKRouter implements Router {
 			for (int i = 0; i < methods.size(); i++) {
 				var mn = methods.get(i);
 
-				var map = parseAnnotations(Annotations.getAnnotations(userRoute.cp, mn, false));
+				var map = parseAnnotations(Annotations.getAnnotations(userRoute, mn, false));
 				if (map == null) continue;
 
 				if (map.type().equals("roj/http/server/auto/Interceptor")) {
@@ -263,7 +262,7 @@ public final class OKRouter implements Router {
 						cw.clazz(CHECKCAST, PayloadInfo.class.getName().replace('.', '/'));
 					} else {
 						defaultSource.put("source", map.getString("deserializeFrom", "UNDEFINED"));
-						convertParams(userRoute.cp, mn, begin);
+						convertParams(userRoute, mn, begin);
 					}
 				}
 
@@ -317,7 +316,7 @@ public final class OKRouter implements Router {
 			}
 
 			var inst = (Dispatcher) Reflection.createInstance(type, caller);
-			var defaultMime = Annotation.findInvisible(userRoute.cp, userRoute, "roj/http/server/auto/Mime");
+			var defaultMime = Annotation.findInvisible(userRoute, userRoute, "roj/http/server/auto/Mime");
 			return new RouteRegistration(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
 		}
 
@@ -342,14 +341,13 @@ public final class OKRouter implements Router {
 			cw.field(GETSTATIC, generatedClass, fid);
 		}
 
-		private void convertParams(ConstantPool cp, MethodNode method, int begin) {
-			List<List<Annotation>> annos = ParameterAnnotations.getParameterAnnotation(cp, method, false);
-			if (annos == null) annos = Collections.emptyList();
+		private void convertParams(ClassNode node, MethodNode method, int begin) {
+			List<List<Annotation>> annos = ParameterAnnotations.get(node, method, false);
 
-			Signature signature = method.getAttribute(cp, Attribute.SIGNATURE);
+			Signature signature = method.getAttribute(node, Attribute.SIGNATURE);
 			List<IType> genTypes = signature == null ? Collections.emptyList() : signature.values;
 
-			List<String> parNames = ParamNameMapper.getParameterNames(cp, method);
+			List<String> parNames = ParamNameMapper.getParameterNames(node.cp, method);
 			if (parNames == null) parNames = Collections.emptyList();
 
 			localIndices = 0;
@@ -541,7 +539,7 @@ public final class OKRouter implements Router {
 
 		@Nullable
 		private static List<ConfigValue> getPrependInterceptors(ClassNode data) {
-			var preDef = Annotation.findInvisible(data.cp, data, "roj/http/server/auto/Interceptor");
+			var preDef = Annotation.findInvisible(data, data, "roj/http/server/auto/Interceptor");
 			return preDef != null ? preDef.getList("value").raw() : null;
 		}
 		private static Annotation parseAnnotations(List<Annotation> list) {

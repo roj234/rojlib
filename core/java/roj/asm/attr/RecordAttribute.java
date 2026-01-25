@@ -1,6 +1,7 @@
 package roj.asm.attr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.Member;
 import roj.asm.Opcodes;
@@ -24,17 +25,17 @@ public final class RecordAttribute extends Attribute {
 		int len = r.readUnsignedShort();
 		fields = new ArrayList<>(len);
 		while (len-- > 0) {
-			Field rd = new Field();
-			fields.add(rd);
+			Field el = new Field();
+			fields.add(el);
 
-			rd.name = ((CstUTF) cp.resolve(r)).str();
-			rd.type = ((CstUTF) cp.resolve(r)).str();
+			el.name = ((CstUTF) cp.resolve(r)).str();
+			el.type = ((CstUTF) cp.resolve(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
-				rd.attributes = new AttributeList(len1);
+				el.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) cp.resolve(r)).str();
-					rd.attributes._add(Attribute.parse(rd, cp, name0, r.slice(r.readInt()), ATTR_RECORD));
+					String name = ((CstUTF) cp.resolve(r)).str();
+					el.attributes._add(new UnparsedAttribute(name, r.slice(r.readInt())));
 				}
 			}
 		}
@@ -80,12 +81,12 @@ public final class RecordAttribute extends Attribute {
 			this.type = type;
 			this.attributes = attributes;
 		}
-		public static Field link(FieldNode field) {return new Field(field.name(), field.rawDesc(), field.attributes);}
+		public static Field link(FieldNode field) {return new Field(field.name(), field.rawDesc(), field.attributes());}
 
 		@Override public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 		@Nullable
 		@Override public AttributeList attributesNullable() { return attributes; }
-		@Override public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes, ATTR_RECORD); }
+		@Override public <T extends Attribute> T getAttribute(ClassNode cn, TypedKey<T> type) { return Attribute.parseSingle(this,cn,type,attributes,ATTR_RECORD); }
 		@Override public char modifier() {return Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;}
 		@Override public String name() { return name; }
 		@Override public void name(String name) {this.name = name;}

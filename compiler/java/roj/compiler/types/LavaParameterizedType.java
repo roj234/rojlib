@@ -1,4 +1,4 @@
-package roj.compiler.asm;
+package roj.compiler.types;
 
 import roj.asm.type.ParameterizedType;
 
@@ -8,9 +8,6 @@ import roj.asm.type.ParameterizedType;
  */
 public final class LavaParameterizedType extends ParameterizedType {
 	public int pos;
-
-	public LavaParameterizedType() {}
-	public LavaParameterizedType(String owner) { this.owner = owner; }
 
 	public boolean isGenericArray() {
 		if (array() == 0) return false;

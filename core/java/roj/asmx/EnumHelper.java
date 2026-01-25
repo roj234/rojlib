@@ -69,7 +69,7 @@ public final class EnumHelper extends CodeVisitor {
 					parPos.put(Type.getMethodDescriptor(param), v);
 				}
 			} else if (mn.name().equals("<clinit>")) {
-				staticInit = mn.getAttribute(klass.cp, Attribute.Code);
+				staticInit = mn.getAttribute(klass, Attribute.Code);
 
 				InsnList list = staticInit.instructions;
 				for (InsnNode node : list) {

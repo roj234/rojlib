@@ -12,6 +12,8 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.config.node.ConfigValue;
+import roj.config.node.LongValue;
+import roj.text.Token;
 
 import java.util.concurrent.TimeUnit;
 
@@ -19,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  * @author Roj234
  * @since 2024/12/4 13:19
  */
-@CompilerPlugin(name = "timeunitTest", desc = "ExprTerm测试插件")
+@CompilerPlugin(name = "timeunitTest", desc = "ExprTerm和UDL测试插件")
 public class TimeUnitPlugin extends Expr {
 	private final TimeUnit unit;
 	private Expr node;
@@ -34,6 +36,11 @@ public class TimeUnitPlugin extends Expr {
 		for (var unit : TimeUnit.values()) {
 			api.newTerminalOp(unit.name(), (ctx, node) -> new TimeUnitPlugin(node, unit));
 		}
+
+		api.newUDLOp("km", (CompileContext ctx, Token token) -> {
+			System.out.println(token);
+			return Expr.constant(Type.LONG_TYPE, new LongValue(Long.parseLong(token.text())));
+		});
 	}
 
 	@Override public String toString() { return node+" "+unit; }

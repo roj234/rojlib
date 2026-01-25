@@ -738,12 +738,12 @@ public final class BuildContext {
 				Context ctx = changedClasses.get(j);
 				ClassNode data = ctx.getData();
 
-				var list = Annotations.getAnnotations(data.cp, data, false);
+				var list = Annotations.getAnnotations(data, data, false);
 				for (int i = 0; i < list.size(); i++) {
 					byAnnotation.computeIfAbsent(list.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}
 
-				list = Annotations.getAnnotations(data.cp, data, true);
+				list = Annotations.getAnnotations(data, data, true);
 				for (int i = 0; i < list.size(); i++) {
 					byAnnotation.computeIfAbsent(list.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}

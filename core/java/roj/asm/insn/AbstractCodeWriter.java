@@ -98,7 +98,12 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 	// region basic instruction
 	public abstract void clazz(@MagicConstant(intValues = {NEW, ANEWARRAY, INSTANCEOF, CHECKCAST}) byte code, String clz);
-	public void newArray(@Range(from = 4, to = 12) byte type) { codeOb.put(NEWARRAY).put(type); }
+
+	/**
+	 * @see Type#getArrayType(int)
+	 * @see Type#getByArrayType(int)
+	 */
+	public void newArray(@Range(from = 4, to = 11) byte type) { codeOb.put(NEWARRAY).put(type); }
 	public abstract void multiArray(String clz, int dimension);
 
 	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, String owner, String name, String desc) { invoke(code, owner, name, desc, false); }

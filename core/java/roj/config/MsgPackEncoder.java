@@ -103,7 +103,7 @@ public class MsgPackEncoder implements ValueEmitter {
 	}
 	public final void emitNull() {onValue();out.write(NULL);}
 
-	public final boolean supportArray() {return true;}
+	public final boolean allowArray() {return true;}
 	public void emit(byte[] array) {
 		onValue();
 		int len = array.length;

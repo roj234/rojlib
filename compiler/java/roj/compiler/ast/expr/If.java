@@ -45,7 +45,7 @@ final class If extends Expr {
 
 		trueBranch = trueBranch.resolve(ctx);
 		falseBranch = falseBranch.resolve(ctx);
-		type = ctx.getCommonParent(trueBranch.type(), falseBranch.type());
+		type = ctx.compiler.getCommonAncestor(trueBranch.type(), falseBranch.type());
 		trueToCommon = ctx.castTo(trueBranch.type(), type, 0);
 		falseToCommon = ctx.castTo(falseBranch.type(), type, 0);
 

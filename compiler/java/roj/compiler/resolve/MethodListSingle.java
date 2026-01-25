@@ -11,8 +11,8 @@ import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.compiler.CompileContext;
 import roj.compiler.ast.expr.Expr;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
-import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -64,7 +64,7 @@ final class MethodListSingle extends ComponentList {
 				// 如果加起来都不够，那么一定不够
 				if (namedArguments.size() + defaultArguments.size() < missedArguments) break error;
 
-				List<String> paramNames = ParamNameMapper.getParameterNames(owner.cp(), method);
+				List<String> paramNames = ParamNameMapper.getParameterNames(owner.cp, method);
 				if (paramNames.size() != declaredArguments.size()) {
 					ctx.report(Kind.INTERNAL_ERROR, "invoke.warn.illegalNameList", method);
 					return null;
@@ -125,25 +125,13 @@ final class MethodListSingle extends ComponentList {
 		if ((flags & NO_REPORT) == 0) {
 			if (result == null) result = ctx.inferrer.resolveInvocation(owner, method, that, actualArguments);
 
-			reportError(ctx, that, actualArguments, method, result);
+			boolean isConstructor = method.name().equals("<init>");
+			IText rest = IText.empty();
+			rest.append("  ").append(IText.translatable("invoke.found")).append(MethodList.renderMethod(method, isConstructor));
+			rest.append("\n  ").append(IText.translatable("invoke.reason")).append(MethodList.getReason(method, that, result));
+
+			ctx.report(Kind.ERROR, "invoke.incompatible.single", ctx.resolve(method.owner()), IText.translatable(isConstructor ? "invoke.constructor" : "invoke.method"), rest);
 		}
 		return null;
-	}
-
-	static void reportError(CompileContext ctx, IType that, List<IType> actualArguments, MethodNode method, MethodResult result) {
-		CharList sb = new CharList().append("invoke.incompatible.single:[\"").append(method.owner()).append("\",[");
-		if (method.name().equals("<init>")) sb.append("invoke.constructor],[");
-		else sb.append("invoke.method,\" ").append(method.name()).append("\"],[");
-
-		sb.append("\"  \",invoke.except,\" \",");
-		MethodList.getArg(method, that, sb).append("\"\n\",");
-
-		MethodList.appendInput(actualArguments, sb);
-
-		sb.append("\"  \",invoke.reason,\" \",");
-		MethodList.appendError(result, sb);
-		sb.append("\"\n\"]");
-
-		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 	}
 }

@@ -60,7 +60,7 @@ public class Tweaker {
 			Function<String, Boolean> existenceChecker = Loader.instance::hasResource;
 
 			CONDITIONAL.annotatedMethod("roj/asmx/launcher/Conditional", (context, node) -> {
-				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
+				var annotation = Annotation.findInvisible(context, node, "roj/asmx/launcher/Conditional");
 				if (!existence.computeIfAbsent(getConditionalTarget(annotation), existenceChecker)) {
 					String action = annotation.getEnumValue("action", "REMOVE");
 					switch (action) {
@@ -72,7 +72,7 @@ public class Tweaker {
 				return false;
 			});
 			CONDITIONAL.annotatedClass("roj/asmx/launcher/Conditional", (context, node) -> {
-				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
+				var annotation = Annotation.findInvisible(context, node, "roj/asmx/launcher/Conditional");
 				if (!existence.computeIfAbsent(getConditionalTarget(annotation), existenceChecker)) {
 					ArrayVal itf = annotation.getList("itf");
 					for (int i = 0; i < itf.size(); i++) {

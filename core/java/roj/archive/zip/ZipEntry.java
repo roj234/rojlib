@@ -263,7 +263,7 @@ public class ZipEntry implements ArchiveEntry, Cloneable {
 		}
 		return header;
 	}
-	final void writeCENExtra(ByteList buf, int extLenOff) {
+	final void writeCENExtra(ByteList buf, int extLenOff, long offsetDelta) {
 		// u2LE(0x01) u2LE(0x00)
 		buf.putInt(0x01000000);
 		int pos = buf.wIndex();
@@ -279,9 +279,10 @@ public class ZipEntry implements ArchiveEntry, Cloneable {
 			   .putLongLE(compressedSize);
 			z64++;
 		}
-		if (startPos() >= U32_MAX) {
+		long offset = startPos() + offsetDelta;
+		if (offset >= U32_MAX) {
 			buf.setIntLE(extLenOff+14, (int) U32_MAX)
-			   .putLongLE(startPos());
+			   .putLongLE(offset);
 			z64++;
 		}
 

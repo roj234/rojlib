@@ -7,6 +7,7 @@ import roj.asm.MethodNode;
 import roj.asm.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.compiler.CompileContext;
@@ -62,7 +63,7 @@ public final class MethodResult {
 	public List<IType> getExceptions(CompileContext ctx) {
 		if (exception != null) return Arrays.asList(exception);
 		else {
-			var list = method.getAttribute(ctx.compiler.resolve(method.owner()).cp(), Attribute.Exceptions);
+			var list = method.getAttribute(ctx.compiler.resolve(method.owner()), Attribute.Exceptions);
 			if (list == null) return Collections.emptyList();
 			return Flow.of(list.value).map((Function<String, IType>) Type::klass).toList();
 		}
@@ -90,5 +91,31 @@ public final class MethodResult {
 		}
 
 		cw.invoke(opcode, method);
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder().append("MethodResult{").append("distance=").append(distance);
+
+		if (method != null) {
+			String humanize = TypeHelper.humanize(desc == null ? Type.getMethodTypes(method.rawDesc()) : Arrays.asList(desc), method.name(), true);
+			sb.append(", method=").append(humanize);
+		}
+
+		if (error != null) {
+			sb.append(", error=").append(Arrays.toString(error));
+		}
+
+		if (varargExplicitlyProvided) {
+			sb.append(", explicit_varargs");
+		}
+		if (exception != null) {
+			sb.append(", exception=").append(Arrays.toString(exception));
+		}
+		if (filledArguments != null) {
+			sb.append(", filledArguments=").append(filledArguments);
+		}
+
+		return sb.append('}').toString();
 	}
 }

@@ -91,7 +91,7 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 
 					var set = new HashSet<String>();
 					var data = ClassNode.parseSkeleton(resource);
-					ModuleAttribute module = data.getAttribute(data.cp, Attribute.Module);
+					ModuleAttribute module = data.getAttribute(Attribute.Module);
 					for (ModuleAttribute.Export export : module.exports) {
 						if (export.to.isEmpty()) {
 							set.add(export.pkg);

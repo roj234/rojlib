@@ -3,6 +3,7 @@ package roj.asm.annotation;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Attributed;
+import roj.asm.ClassNode;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
@@ -159,7 +160,7 @@ public class Annotation extends MapValue {
 		return null;
 	}
 
-	public static Annotation findInvisible(ConstantPool cp, Attributed node, String type) {
-		return find(Annotations.getAnnotations(cp, node, false), type);
+	public static Annotation findInvisible(ClassNode cn, Attributed node, String type) {
+		return find(Annotations.getAnnotations(cn, node, false), type);
 	}
 }

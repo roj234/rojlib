@@ -6,9 +6,10 @@ import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.CompileContext;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.asm.WildcardType;
 import roj.compiler.ast.GeneratorUtil;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -165,7 +166,7 @@ public final class NewArray extends Expr {
 			expr.set(i, node);
 
 			if (cp == null) cp = node.type();
-			else cp = ctx.getCommonParent(cp, node.type());
+			else cp = ctx.compiler.getCommonAncestor(cp, node.type());
 		}
 
 		if (cp != null) {
@@ -173,10 +174,9 @@ public final class NewArray extends Expr {
 			cp.setArrayDim(cp.array()+1);
 			type = cp;
 		}
-		ctx.report(this, Kind.WARNING, "arrayDef.autoTypeTip", type);
 	}
 
-	@Override public IType type() { return type == null ? WildcardType.anyType : type; }
+	@Override public IType type() { return type == null || (flag&8) != 0 ? Types.anyType : type; }
 	@Override public boolean isConstant() { return (flag&2) != 0; }
 	@Override public Object constVal() {
 		Object[] array = new Object[expr.size()];
@@ -188,12 +188,12 @@ public final class NewArray extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		if ((flag&8) != 0) {
 			var ctx = cw.ctx;
-			if (cast.getType1() == null) {
-				ctx.report(this, Kind.ERROR, "lambda.untyped");
+			if (cast.getTarget() == null) {
+				ctx.report(this, Kind.ERROR, "type.cannotInfer", IText.translatable("type.autoArray"));
 				return;
 			}
 			flag = 0;
-			type = cast.getType1();
+			type = cast.getTarget();
 			resolve(ctx);
 		}
 

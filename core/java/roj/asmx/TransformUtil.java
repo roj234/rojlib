@@ -200,7 +200,7 @@ public class TransformUtil {
 		writer.accept(c);
 
 		if (clinit != null) {
-			Code code = clinit.getAttribute(data.cp, Attribute.Code);
+			Code code = clinit.getAttribute(data, Attribute.Code);
 			if (code.stackSize == 0) code.stackSize = 1;
 			code.computeFrames(FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES);
 			code.instructions.replace(0,0, (InsnList) c, false);

@@ -20,7 +20,7 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public sealed class Type implements IType permits Type.ADT {
+public class Type implements IType {
 	public static final char ARRAY = '[', OBJECT = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', LONG = 'J', FLOAT = 'F', DOUBLE = 'D';
 
 	/** The {@code void} type. */
@@ -82,10 +82,7 @@ public sealed class Type implements IType permits Type.ADT {
 	 * @return 类型常量，无效抛异常
 	 * @throws IllegalArgumentException 如果 sort 无效
 	 */
-	public static int getBySort(@Range(from = SORT_VOID, to = SORT_OBJECT) int sort) {
-		if (sort < SORT_VOID || sort > SORT_OBJECT) throw new IllegalArgumentException();
-		return TypeInfo.bySort[sort];
-	}
+	public static int getBySort(@Range(from = SORT_VOID, to = SORT_OBJECT) int sort) {return TypeInfo.bySort[sort];}
 
 	/**
 	 * 获取基本类型的包装类型
@@ -107,32 +104,12 @@ public sealed class Type implements IType permits Type.ADT {
 		return TypeInfo.byId[c-BYTE] != null;
 	}
 
-	// for Lava Compiler only
-	// since 2024/11/30 13:30
-	@Deprecated
-	public static final class ADT extends Type {
-		public ADT(int type, String owner) {
-			super((char) type);
-			this.owner = owner;
-		}
-
-		@Override public boolean isPrimitive() {return false;}
-		//@Override public int getActualType() {return type;}
-		//@Override public Type rawType() {return std(type);}
-
-		@Override
-		public void toString(CharList sb) {
-			super.toString(sb);
-			if (type != OBJECT) sb.append("<alias of ").append(getName(type)).append(">");
-		}
-	}
-
 	@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG,OBJECT})
 	public final byte type;
 	public String owner;
 	private byte array;
 
-	Type(char type) {this.type = (byte) type;}
+	protected Type(char type) {this.type = (byte) type;}
 
 	/**
 	 * TYPE_OTHER

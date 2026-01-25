@@ -23,7 +23,10 @@ import roj.collect.LinkedHashMap;
 import roj.collect.*;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.Types;
-import roj.compiler.asm.*;
+import roj.compiler.asm.AnnotationBuilder;
+import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.ParamAnnotationBinder;
+import roj.compiler.asm.Variable;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Expr;
@@ -31,6 +34,8 @@ import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.resolve.*;
+import roj.compiler.types.LavaParameterizedType;
+import roj.compiler.types.SignatureBuilder;
 import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -46,6 +51,8 @@ import java.util.*;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.LavaTokenizer.*;
+import static roj.compiler.diagnostic.IText.literal;
+import static roj.compiler.diagnostic.IText.translatable;
 import static roj.text.Token.LITERAL;
 
 /**
@@ -97,7 +104,7 @@ public abstract class CompileUnit extends ClassNode {
 	protected final IntList methodIdx = new IntList(), fieldIdx = new IntList();
 
 	// 类的泛型签名 当前处理的签名上下文
-	public LPSignature classSignature, activeSignature;
+	public SignatureBuilder classSignature, activeSignature;
 
 	// record class
 	// 同时在作用域外复用 (aliasing) 作为枚举类 $VALUES 的 index
@@ -107,10 +114,10 @@ public abstract class CompileUnit extends ClassNode {
 
 	// code block task
 	private final ArrayList<ParseTask> lazyTasks = new ArrayList<>();
-	private final HashMap<Attributed, List<AnnotationPrimer>> annoTask = new LinkedHashMap<>();
+	private final HashMap<Attributed, List<AnnotationBuilder>> annoTask = new LinkedHashMap<>();
 
 	protected final void addParseTask(ParseTask task) {lazyTasks.add(task);}
-	protected final void addAnnotations(Attributed node, List<AnnotationPrimer> list) {annoTask.put(node, list);}
+	protected final void addAnnotations(Attributed node, List<AnnotationBuilder> list) {annoTask.put(node, list);}
 	protected final void commitAnnotations(Attributed node) {
 		if (!ctx.tmpAnnotations.isEmpty()) {
 			annoTask.put(node, new ArrayList<>(ctx.tmpAnnotations));
@@ -255,7 +262,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * @return 可修改的内部类条目列表
 	 */
 	public final List<InnerClasses.Item> innerClasses() {
-		InnerClasses c = getAttribute(cp, Attribute.InnerClasses);
+		InnerClasses c = getAttribute(this, Attribute.InnerClasses);
 		if (c == null) addAttribute(c = new InnerClasses());
 		return c.classes;
 	}
@@ -320,7 +327,7 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
-	protected static final int GENERIC_INNER = 8, SKIP_TYPE_PARAM = 16;
+	protected static final int GENERIC_INNER = 8, SKIP_TYPE_VARIABLE = 16;
 	private static final int GENERIC_TERMINATE = 32, CHECK_MODE = 64;
 	/**
 	 * 读取类型声明（支持泛型、数组等特性）.<br>
@@ -336,8 +343,8 @@ public abstract class CompileUnit extends ClassNode {
 	 */
 	public final IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY, TYPE_ALLOW_VOID}) int flags) throws ParseException {
 		IType type = readType(ctx.tokenizer, flags);
-		if (activeSignature != null && type instanceof LavaParameterizedType g)
-			return activeSignature.applyTypeParam(g);
+		//if (activeSignature != null && type instanceof TypeVariable g)
+		//	return activeSignature.applyTypeParam(g);
 		return type;
 	}
 	/**
@@ -368,8 +375,17 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			var sign = activeSignature != null ? activeSignature : classSignature;
-			type = sign == null || !sign.isTypeParam(klass) ? Type.klass(klass) : (flags & SKIP_TYPE_PARAM) != 0 ? new LavaParameterizedType(klass) : new TypeVariable(klass);
+			done: {
+				if ((flags & SKIP_TYPE_VARIABLE) == 0) {
+					var sign = activeSignature != null ? activeSignature : classSignature;
+					TypeVariableDeclaration decl;
+					if (sign != null && (decl = sign.resolveTypeVariable(klass)) != null) {
+						type = new TypeVariable(decl);
+						break done;
+					}
+				}
+				type = Type.klass(klass);
+			}
 		}
 
 		if ((flags & TYPE_NO_ARRAY) == 0) {
@@ -453,7 +469,7 @@ public abstract class CompileUnit extends ClassNode {
 		if (w.type() == lss) {
 			if (wr.nextIf(gtr)) {
 				if ((flags&GENERIC_INNER) != 0) ctx.report(Kind.ERROR, "type.illegalAnyType");
-				else g.addChild(WildcardType.anyGeneric);
+				else g.addChild(Types.anyGeneric);
 
 				flags |= GENERIC_TERMINATE;
 			} else {
@@ -532,11 +548,14 @@ public abstract class CompileUnit extends ClassNode {
 		return g.typeParameters.isEmpty() && g.sub == null ? Type.klass(g.owner, g.array()) : g;
 	}
 
-	protected final LPSignature makeSignature() {
-		if (activeSignature == null) activeSignature = new LPSignature(0);
+	protected final SignatureBuilder makeSignature() {
+		if (activeSignature == null) {
+			activeSignature = new SignatureBuilder(0);
+			activeSignature.parent = classSignature;
+		}
 		return activeSignature;
 	}
-	protected final LPSignature finishSignature(LPSignature parent, int kind, Attributed attr) {
+	protected final SignatureBuilder finishSignature(SignatureBuilder parent, int kind, Attributed attr) {
 		var sign = activeSignature;
 		if (sign == null) return null;
 		activeSignature = null;
@@ -544,7 +563,7 @@ public abstract class CompileUnit extends ClassNode {
 		sign.parent = parent;
 		sign.type = (byte) kind;
 
-		sign.applyTypeParam(attr instanceof MethodNode mn ? mn : null);
+		sign.applyTypeParam(attr);
 		if (attr != null) attr.addAttribute(sign);
 		return sign;
 	}
@@ -567,13 +586,13 @@ public abstract class CompileUnit extends ClassNode {
 				w = wr.next();
 				if (w.type() != id) break;
 
-				IType g = readType(wr, TYPE_GENERIC);
+				IType g = readType(wr, TYPE_GENERIC|SKIP_TYPE_VARIABLE);
 				bounds.add(g);
 
 				id = and;
 			}
 
-			s.typeVariables.put(name, bounds.isEmpty() ? LPSignature.UNBOUNDED_TYPE_PARAM : Helpers.cast(Arrays.asList(bounds.toArray())));
+			s.typeVariables.add(bounds.isEmpty() ? SignatureBuilder.newUnbounded(name) : Helpers.cast(new TypeVariableDeclaration(name, bounds.toArray())));
 		} while (w.type() == comma);
 
 		if (w.type() != gtr) wr.unexpected(w.text(), "type.except.afterLss");
@@ -583,13 +602,13 @@ public abstract class CompileUnit extends ClassNode {
 	 * 读取注解列表
 	 * @param list 要填充的注解列表（使用{@link Collections#emptyList()}以跳过）
 	 */
-	public final List<AnnotationPrimer> readAnnotations(List<AnnotationPrimer> list) throws ParseException {
+	public final List<AnnotationBuilder> readAnnotations(List<AnnotationBuilder> list) throws ParseException {
 		LavaTokenizer wr = ctx.tokenizer;
 
 		while (true) {
 			int pos = wr.index;
 
-			var a = new AnnotationPrimer(readRef(), pos+1);
+			var a = new AnnotationBuilder(readRef(), pos+1);
 			// 允许忽略注解
 			if (list != Collections.EMPTY_LIST) list.add(a);
 
@@ -609,14 +628,14 @@ public abstract class CompileUnit extends ClassNode {
 				wr.retract();
 
 				a.valueOnly = true;
-				a.newEntry(this, "value");
+				a.addMember(this, "value");
 
 				w = wr.next();
 			} else {
 				wr.skip();
 
 				while (true) {
-					a.newEntry(this, name);
+					a.addMember(this, name);
 
 					if (wr.next().type() != comma) break;
 
@@ -659,9 +678,15 @@ public abstract class CompileUnit extends ClassNode {
 	 */
 	public void S2p1resolveInheritance() {
 		var ctx = getContext(21);
-		ctx.errorReportIndex = classIdx;
+
+		var top = nestHost;
+		while (top.nestHost != top) top = top.nestHost;
+
+		ctx.errorReportIndex = top.classIdx;
 		// TypeResolver
 		importList.resolve(ctx);
+
+		ctx.errorReportIndex = classIdx;
 
 		int endIndex = name.lastIndexOf('/');
 		if (endIndex > 0) {
@@ -677,7 +702,7 @@ public abstract class CompileUnit extends ClassNode {
 		var pInfo = ctx.resolve(parent());
 		if (pInfo == null) {
 			rawTypeResolveFail = true;
-			ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", parent(), "[symbol.type,\" \","+name+", \" \", cu.unknown.super]");
+			ctx.report(Kind.ERROR, "symbol.noSuchSymbol", translatable("symbol.type"), parent(), translatable("symbol.type").append(literal(this)).append(translatable("cu.unknown.super")));
 		} else {
 			int acc = pInfo.modifier;
 			if (0 != (acc & ACC_FINAL)) {
@@ -696,11 +721,11 @@ public abstract class CompileUnit extends ClassNode {
 			var info = ctx.resolve(iname);
 			if (info == null) {
 				rawTypeResolveFail = true;
-				ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", iname, "[symbol.type,\" \","+name+", \" \", [cu.unknown.interface, "+i+"]]");
+				ctx.report(Kind.ERROR, "symbol.noSuchSymbol", translatable("symbol.type"), iname, translatable("symbol.type").append(literal(this)).append(translatable("cu.unknown.interface", i+1)));
 			} else {
 				int acc = info.modifier;
 				if (0 == (acc & ACC_INTERFACE)) {
-					ctx.report(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
+					ctx.report(Kind.ERROR, "cu.resolve.notInheritable", translatable("cu.class"), info);
 				}
 
 				interfaces.set(i, cp.getClazz(info.name()));
@@ -717,7 +742,7 @@ public abstract class CompileUnit extends ClassNode {
 					var info = ctx.resolve(type);
 
 					if (info == null) {
-						ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", type, "[symbol.type,\" \","+name+", \" \", [cu.unknown.permits, "+i+"]]");
+						ctx.report(Kind.ERROR, "symbol.noSuchSymbol", translatable("symbol.type"), type, translatable("symbol.type").append(literal(this)).append(translatable("cu.unknown.permits", i+1)));
 					} else {
 						value.set(i, info.name());
 					}
@@ -768,11 +793,11 @@ public abstract class CompileUnit extends ClassNode {
 		var ctx = getContext(22);
 		ctx.errorReportIndex = classIdx;
 		// 检测循环继承
-		ctx.getHierarchyList(this);
+		ctx.compiler.getHierarchyList(this);
 
 		String parent = parent();
 		// 检测泛型异常
-		if (classSignature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
+		if (classSignature != null && ctx.compiler.instanceOf(parent, "java/lang/Throwable")) {
 			ctx.report(Kind.ERROR, "cu.genericException");
 		}
 		// 不能静态继承非静态类
@@ -797,7 +822,7 @@ public abstract class CompileUnit extends ClassNode {
 			ctx.accessTypeOrReport(info);
 
 			// 检查是否继承自密封类
-			var ps = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
+			var ps = info.getAttribute(Attribute.PermittedSubclasses);
 			if (ps != null) {
 				if ((extendedFlags&(_ACC_SEALED|_ACC_NON_SEALED|ACC_FINAL)) == 0) {
 					ctx.report(Kind.ERROR, "cu.sealed.missing");
@@ -847,11 +872,11 @@ public abstract class CompileUnit extends ClassNode {
 		for (int i = 0; i < fieldIdx.size(); i++) {
 			ctx.errorReportIndex = fieldIdx.get(i);
 			var field = fields.get(i);
-			var s = (LPSignature) field.getAttribute("Signature");
+			var s = (SignatureBuilder) field.getAttribute("Signature");
 			if (s != null) {
 				activeSignature = s;
 				s.resolve(ctx);
-				field.fieldType(s.typeParamToBound(s.values.get(0)));
+				field.fieldType(s.getErasuredType(s.values.get(0)));
 			} else {
 				field.fieldType(ctx.resolveType(field.fieldType()).rawType());
 			}
@@ -860,15 +885,13 @@ public abstract class CompileUnit extends ClassNode {
 		for (int i = 0; i < methodIdx.size(); i++) {
 			ctx.errorReportIndex = methodIdx.get(i);
 			var method = methods.get(i);
-			var s = (LPSignature) method.getAttribute("Signature");
+			var s = (SignatureBuilder) method.getAttribute("Signature");
 			List<Type> par = method.parameters();
 			if (s != null) {
 				activeSignature = s;
-				ctx.caster.typeParams = s.typeVariables;
-
 				s.resolve(ctx);
-				for (int j = 0; j < par.size(); j++) par.set(j, s.typeParamToBound(s.values.get(j)));
-				method.setReturnType(s.typeParamToBound(s.values.get(par.size())));
+				for (int j = 0; j < par.size(); j++) par.set(j, s.getErasuredType(s.values.get(j)));
+				method.setReturnType(s.getErasuredType(s.values.get(par.size())));
 			} else {
 				for (int j = 0; j < par.size(); j++) par.set(j, ctx.resolveType(par.get(j)).rawType());
 				method.setReturnType(ctx.resolveType(method.returnType()).rawType());
@@ -877,9 +900,8 @@ public abstract class CompileUnit extends ClassNode {
 		ctx.reportPseudoType = false;
 
 		// TODO 本阶段后续要用到这个字段吗？
-		activeSignature = new LPSignature(1);
+		activeSignature = new SignatureBuilder(1);
 		activeSignature.values = null;
-		activeSignature.typeVariables = null;
 
 		// annotation
 		for (var list : annoTask.values()) {
@@ -921,7 +943,7 @@ public abstract class CompileUnit extends ClassNode {
 					} else {
 						ctx.accessTypeOrReport(info);
 
-						if (!ctx.instanceOf(info.name(), "java/lang/Throwable"))
+						if (!ctx.compiler.instanceOf(info.name(), "java/lang/Throwable"))
 							ctx.report(Kind.ERROR, "cu.throwException", classes.get(i));
 
 						classes.set(j, info.name());
@@ -1002,7 +1024,7 @@ public abstract class CompileUnit extends ClassNode {
 					w.insn(fieldType.getOpcode(ARETURN));
 					w.finish();
 
-					var sign = ((LPSignature) field.getAttribute("Signature"));
+					var sign = ((SignatureBuilder) field.getAttribute("Signature"));
 					if (sign != null) {
 						Signature attr = new Signature(Signature.METHOD);
 						attr.values = sign.values;
@@ -1126,7 +1148,7 @@ public abstract class CompileUnit extends ClassNode {
 	 *
 	 * <p>解析逻辑：</p>
 	 * <ol>
-	 *   <li>对每个 {@link AnnotationPrimer} 解析其类型名</li>
+	 *   <li>对每个 {@link AnnotationBuilder} 解析其类型名</li>
 	 *   <li>如果注解值中包含其他注解（单个或数组），递归解析其类型名</li>
 	 *   <li>解析失败的注解会被从列表中移除，并报告错误</li>
 	 * </ol>
@@ -1138,7 +1160,7 @@ public abstract class CompileUnit extends ClassNode {
 	 *                      <li>无法解析的注解会被从列表中移除</li>
 	 *                    </ul>
 	 */
-	public final void resolveAnnotationTypes(CompileContext ctx, List<AnnotationPrimer> annotations) {
+	public final void resolveAnnotationTypes(CompileContext ctx, List<AnnotationBuilder> annotations) {
 		for (int i = 0; i < annotations.size();) {
 			var annotation = annotations.get(i);
 			ctx.errorReportIndex = annotation.pos;
@@ -1154,12 +1176,12 @@ public abstract class CompileUnit extends ClassNode {
 						if (value instanceof ArrayVal array) {
 							var list1 = array.raw();
 							for (int j = 0; j < list1.size(); j++) {
-								if (!resolveAnnotationType(ctx, (AnnotationPrimer) list1.get(j))) {
+								if (!resolveAnnotationType(ctx, (AnnotationBuilder) list1.get(j))) {
 									break failure;
 								}
 							}
 						} else {
-							if (!resolveAnnotationType(ctx, (AnnotationPrimer) value)) {
+							if (!resolveAnnotationType(ctx, (AnnotationBuilder) value)) {
 								break failure;
 							}
 						}
@@ -1173,7 +1195,7 @@ public abstract class CompileUnit extends ClassNode {
 			annotations.remove(i);
 		}
 	}
-	private boolean resolveAnnotationType(CompileContext ctx, AnnotationPrimer a) {
+	private boolean resolveAnnotationType(CompileContext ctx, AnnotationBuilder a) {
 		var type = ctx.resolve(a.type());
 		if (type != null) {
 			a.setType(type.name());
@@ -1374,12 +1396,12 @@ public abstract class CompileUnit extends ClassNode {
 				skip: {
 					for (int j = 0; j < inherits.size(); j++) {
 						// 如果被父类或其它接口实现了，那么跳过
-						if (ctx.getHierarchyList(inherits.get(j)).containsKey(info.name())) {
+						if (ctx.compiler.getHierarchyList(inherits.get(j)).containsKey(info.name())) {
 							break skip;
 						}
 					}
 
-					var myParent = ctx.getHierarchyList(info);
+					var myParent = ctx.compiler.getHierarchyList(info);
 					// 这里是 > 而不是 >= 在当前类实现了接口而继承Object的情况下，如果是>=那么第0项会被替换掉，所以要避免
 					// 这个操作与下方的continue可以避免Object的方法被访问多次，不过好像没有意义（
 					for (int j = inherits.size()-1; j > 0; j--) {
@@ -1511,28 +1533,51 @@ public abstract class CompileUnit extends ClassNode {
 
 			ctx.errorReportIndex = i >= methodIdx.size() ? -1 : methodIdx.get(i);
 
-			var myGenericInfo = ctx.inferrer.getGenericParameters(this, impl, null);
+			MethodResult myGenericInfo = new MethodResult(impl, 0, false);
+			var signature = impl.getAttribute(this, Attribute.SIGNATURE);
+			if (signature != null) {
+				myGenericInfo.desc = signature.values.toArray(new IType[signature.values.size()]);
+			}
+
 			List<IType> myArgs = myGenericInfo.parameters();
 			IType myReturn = myGenericInfo.returnType();
 
-			var inherit = inheritResult.method;
+			var superMethod = inheritResult.method;
 
 			implementCheck.removeValue(d);
-			if (!ctx.inferrer.validateOverrideCompatibility(ctx, inherit, Type.klass(name), myArgs, inheritResult.parameters()))
+
+			List<IType> parameters = inheritResult.parameters();
+			List<IType> resolvedValue = ctx.compiler.getTypeArgumentsFor(this, superMethod.owner());
+			if (resolvedValue != null) {
+				ClassNode resolve = ctx.resolve(superMethod.owner());
+				Signature parSign = superMethod.getAttribute(resolve, Attribute.SIGNATURE);
+				if (parSign != null) {
+					var typeVariables = resolve.getSignature().typeVariables;
+					var typeParameterMap = Inferrer.createSubstitutionMap(typeVariables, resolvedValue);
+					parameters = new ArrayList<>();
+
+					List<IType> values = parSign.values;
+					for (IType value : values) {
+						parameters.add(Inferrer.substituteTypeVariables(value, typeParameterMap));
+					}
+				}
+			}
+
+			if (!ctx.inferrer.validateOverrideGenericCompatibility(ctx, superMethod, Type.klass(name), myArgs, parameters))
 				continue;
 
 			// 检查覆盖静态或访问权限降低
-			checkDowngrade(impl, inherit, ctx);
+			checkDowngrade(impl, superMethod, ctx);
 
 			// 检测Override
 			var annotations = annoTask.getOrDefault(impl, Collections.emptyList());
 			for (int j = 0; j < annotations.size(); j++) {
-				AnnotationPrimer a = annotations.get(j);
+				AnnotationBuilder a = annotations.get(j);
 				if (a.type().equals("java/lang/Override")) {
 					/**
 					 * EMPTY_MAP is a special marker object, will be check in {@link roj.compiler.plugins.JavaLangAnnotations}
  					 */
-					a.setValues(Collections.emptyMap());
+					a.setProperties(Collections.emptyMap());
 					break;
 				}
 			}
@@ -1542,13 +1587,15 @@ public abstract class CompileUnit extends ClassNode {
 			// 返回值更精确而需要桥接，或更不精确而无法覆盖
 			var cast = ctx.caster.checkCast(myReturn, overrideReturnType);
 			if (cast.type != TypeCast.UPCAST) {
-				String inline = "cu.override.returnType:[typeCast.error."+cast.type+",\""+myReturn+"\",\""+overrideReturnType+"\"]";
-				ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner(), inherit, inline);
+				ctx.report(Kind.ERROR, "cu.override.unable", this,
+						ctx.resolve(superMethod.owner()), superMethod,
+						translatable("cu.override.returnType", translatable("typeCast.error."+cast.type, myReturn, overrideReturnType))
+				);
 			} else
 
 			// 生成桥接方法 这里不检测泛型(主要是TypeParam)
-			if (!inherit.rawDesc().equals(impl.rawDesc())) {
-				createDelegation((inherit.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, impl, inherit, true, false);
+			if (!superMethod.rawDesc().equals(impl.rawDesc())) {
+				createDelegation((superMethod.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, impl, superMethod, true, false);
 			}
 
 			if (!ctx.compiler.hasFeature(Compiler.OMIT_CHECKED_EXCEPTION)) {
@@ -1565,8 +1612,11 @@ public abstract class CompileUnit extends ClassNode {
 							if (c.type == 0) continue outer;
 						}
 
-						String inline = "cu.override.thrown:"+f.owner().replace('/', '.');
-						ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner().replace('/', '.'), inherit, inline);
+						ctx.report(Kind.ERROR, "cu.override.unable", this,
+								ctx.resolve(superMethod.owner()),
+								superMethod,
+								translatable("cu.override.thrown", f)
+						);
 					}
 				}
 			}
@@ -1575,13 +1625,13 @@ public abstract class CompileUnit extends ClassNode {
 		ctx.errorReportIndex = classIdx;
 		for (MemberDescriptor method : implementCheck) {
 			if ((method.modifier&__ACC_UNRELATED) != 0) {
-				if ((method.modifier&__ACC_INHERITED) != 0) ctx.report(Kind.ERROR, "cu.unrelatedDefault.inherit", method, "");
-				else ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, name.replace('/', '.'));
+				if ((method.modifier&__ACC_INHERITED) != 0) ctx.report(Kind.ERROR, "cu.unrelatedDefault.inherit", method, "Not Traced");
+				else ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, this);
 			} else {
 				// 前面没做删除，所以在这里做检查
 				if ((method.modifier&ACC_ABSTRACT) == 0) continue;
 
-				ctx.report(Kind.ERROR, "cu.override.noImplement", name, method);
+				ctx.report(Kind.ERROR, "cu.override.noImplement", this, method);
 			}
 		}
 		implementCheck.clear();
@@ -1612,7 +1662,7 @@ public abstract class CompileUnit extends ClassNode {
 
 		IType oldReturnType = prev.returnType();
 		IType newReturnType = curr.returnType();
-		IType parent = ctx.getCommonParent(newReturnType, oldReturnType);
+		IType parent = ctx.compiler.getCommonAncestor(newReturnType, oldReturnType);
 
 		if (parent.equals(oldReturnType)) {
 			return curr;
@@ -1714,7 +1764,7 @@ public abstract class CompileUnit extends ClassNode {
 	// region 阶段3 注解处理 & 常量字段
 	private int fieldParseState;
 	void _setSign(Attributed method) {
-		var sign = (LPSignature) method.getAttribute("Signature");
+		var sign = (SignatureBuilder) method.getAttribute("Signature");
 		activeSignature = sign != null ? sign : classSignature;
 	}
 	// 解析static final字段，不过顺便把非final也解析了
@@ -1801,8 +1851,8 @@ public abstract class CompileUnit extends ClassNode {
 							values = new ArrayList<>();
 							values.add(removable);
 
-							var repeat = new AnnotationPrimer(desc.repeatOn, removable.pos);
-							repeat.setValues(Collections.singletonMap("value", new ArrayVal(values)));
+							var repeat = new AnnotationBuilder(desc.repeatOn, removable.pos);
+							repeat.setProperties(Collections.singletonMap("value", new ArrayVal(values)));
 							list.set(p, repeat);
 							if (desc.retention() != AnnotationType.SOURCE) {
 								//noinspection all
@@ -1848,7 +1898,7 @@ public abstract class CompileUnit extends ClassNode {
 					String name = entry.getKey();
 
 					Object node = Helpers.cast(extra.remove(name));
-					if (node instanceof Expr expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
+					if (node instanceof Expr expr) a.raw().put(name, AnnotationBuilder.evaluate(ctx, expr, entry.getValue()));
 					else if (node == null && !desc.elementDefault.containsKey(entry.getKey())) missed.add(name);
 				}
 
@@ -1874,7 +1924,7 @@ public abstract class CompileUnit extends ClassNode {
 			if (c.name().endsWith("/package-info")) mask = AnnotationType.PACKAGE;
 			else if (c.name().equals("module-info")) mask = AnnotationType.MODULE;
 			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationType.ANNOTATION_TYPE : AnnotationType.TYPE;
-		} else if (key instanceof ParamAnnotationRef) {
+		} else if (key instanceof ParamAnnotationBinder) {
 			mask = AnnotationType.PARAMETER | AnnotationType.TYPE_USE;
 		} else if (key instanceof Variable) {
 			mask = AnnotationType.LOCAL_VARIABLE | AnnotationType.TYPE_USE;
@@ -1924,7 +1974,7 @@ public abstract class CompileUnit extends ClassNode {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
-				var exceptionList = method.getAttribute(cp, Attribute.Exceptions);
+				var exceptionList = method.getAttribute(this, Attribute.Exceptions);
 				if (exceptionList == null) { exceptions.clear(); break; }
 
 				if (exceptions.isEmpty()) {
@@ -1934,7 +1984,7 @@ public abstract class CompileUnit extends ClassNode {
 					loop:
 					for (int j = exceptions.size() - 1; j >= 0; j--) {
 						var existing = exceptions.get(j);
-						var existingHierarchies = ctx.getHierarchyList(existing);
+						var existingHierarchies = ctx.compiler.getHierarchyList(existing);
 
 						for (String name : exceptionList.value) {
 							var newException = ctx.compiler.resolve(name);
@@ -1945,7 +1995,7 @@ public abstract class CompileUnit extends ClassNode {
 
 							// 如果existing是newException的子类
 							// Exception + RuntimeException => replace to latter
-							if (ctx.getHierarchyList(newException).containsKey(existing.name())) {
+							if (ctx.compiler.getHierarchyList(newException).containsKey(existing.name())) {
 								if (!exceptions.contains(newException)) {
 									exceptions.set(j, newException);
 									continue loop;

@@ -7,6 +7,8 @@ import roj.asm.Opcodes;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.asm.type.TypeVariable;
+import roj.asm.type.TypeVariableDeclaration;
 import roj.collect.ArrayList;
 import roj.collect.Int2IntMap;
 import roj.collect.IntList;
@@ -15,12 +17,12 @@ import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
 import roj.compiler.LavaTokenizer;
 import roj.compiler.api.Compiler;
-import roj.compiler.asm.LavaParameterizedType;
-import roj.compiler.asm.WildcardType;
+import roj.compiler.api.Types;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.types.LavaParameterizedType;
 import roj.config.ConfigMaster;
 import roj.config.ValueEmitter;
 import roj.config.mapper.ObjectMapper;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.compiler.LavaTokenizer.*;
+import static roj.compiler.diagnostic.IText.translatable;
 import static roj.text.Token.LITERAL;
 
 /**
@@ -208,7 +211,7 @@ public final class ExprParser {
 	public ExprParser(CompileContext ctx) {this.ctx = ctx;}
 
 	public RawExpr parse(int flag) throws ParseException {
-		hasNullExpr = false;
+		hasGrammarError = false;
 		depth = -1;
 		RawExpr node;
 		try {
@@ -416,7 +419,7 @@ public final class ExprParser {
 				case -7 -> cur = Expr.constant(Type.DOUBLE_TYPE, ConfigValue.valueOf(w.asDouble()));
 				case -8 -> cur = Expr.valueOf(true);
 				case -9 -> cur = Expr.valueOf(false);
-				case -10-> cur = Expr.constant(WildcardType.anyType, null);
+				case -10-> cur = Expr.constant(Types.anyType, null);
 				// MIN_VALUE_NUMBER_LITERAL
 				case -17 -> ctx.report(Kind.ERROR, "lexer.number.overflow");
 				// this
@@ -689,7 +692,13 @@ public final class ExprParser {
 					break endValueConv;
 					case -9://method_referent this::stop
 						if (!waitDot) ue(wr, w.text(), "lexer.identifier");
-						cur = new Lambda(cur, wr.except(LITERAL).text());
+						w = wr.next();
+						String method = w.text();
+						if (w.type() != LITERAL) {
+							if (w.type() == NEW) method = "<init>";
+							else ctx.report(Kind.ERROR, "unexpected_2", w.text(), translatable("block.except.name"));
+						}
+						cur = new Lambda(cur, method);
 					break endValueConv;
 
 					// 我是无敌可爱的分隔线
@@ -783,10 +792,10 @@ public final class ExprParser {
 			cur = conditional(cur, middle, right);
 		}
 
-		if (hasNullExpr) cur = null;
+		if (hasGrammarError) cur = null;
 
 		if (cur == null && (flag&NAE) != 0) {
-			if (!hasNullExpr) ctx.report(Kind.ERROR, "expr.illegalStart");
+			checkNullExpr(null);
 			cur = NaE.NOEXPR;
 		}
 
@@ -855,11 +864,11 @@ public final class ExprParser {
 		return args.isEmpty() ? Collections.emptyList() : copyOf(args);
 	}
 
-	private boolean hasNullExpr;
+	private boolean hasGrammarError;
 	private void checkNullExpr(Expr cur) {
-		if (cur == null && !hasNullExpr) {
-			ctx.report(Kind.ERROR, "expr.illegalStart");
-			hasNullExpr = true;
+		if (cur == null && !hasGrammarError) {
+			ctx.report(Kind.ERROR, "expr.illegalEnd", ctx.tokenizer.current().text());
+			hasGrammarError = true;
 		}
 	}
 
@@ -997,26 +1006,21 @@ public final class ExprParser {
 		var sb = ctx.getTmpSb();
 		sb.append(first);
 
-		wr.state = STATE_TYPE;
 		// lambda (a, b) ->
 		notUntypedLambda:{
-			try {
-				while (true) {
-					w = wr.next();
-					if (w.type() != dot) {
-						// 如果遇到逗号，那么不可能是类型转换
-						// (a, b.c ...
-						if (w.type() == comma) break;
-						break notUntypedLambda;
-					}
-					w = wr.next();
-					// 通常是 .class
-					if (w.type() != LITERAL) return null;
-
-					sb.append('/').append(w.text());
+			while (true) {
+				w = wr.next();
+				if (w.type() != dot) {
+					// 如果遇到逗号，那么不可能是类型转换
+					// (a, b.c ...
+					if (w.type() == comma) break;
+					break notUntypedLambda;
 				}
-			} finally {
-				wr.state = STATE_EXPR;
+				w = wr.next();
+				// 通常是 .class
+				if (w.type() != LITERAL) return null;
+
+				sb.append('/').append(w.text());
 			}
 
 			return pLambdaNoType(wr, first);
@@ -1052,7 +1056,14 @@ public final class ExprParser {
 		if (flag == 0) return null;
 
 		wr.skip(-2);
-		return Type.klass(sb.toString());
+
+		String typename = sb.toString();
+
+		var signature = ctx.file.activeSignature;
+		TypeVariableDeclaration decl;
+		if (signature != null && (decl = signature.resolveTypeVariable(typename)) != null)
+			return new TypeVariable(decl);
+		return Type.klass(typename);
 	}
 
 	private List<VariableDeclare> pLambdaTyped(LavaTokenizer wr, IType first) throws ParseException {
@@ -1159,7 +1170,7 @@ public final class ExprParser {
 			int lineIdx = wr.LNIndex;
 			Expr node = parse1(stopWord&(STOP_RSB|STOP_COMMA|STOP_SEMICOLON));
 			if (node == null) {
-				ctx.report(Kind.ERROR, "lambda解析失败");
+				ctx.report(Kind.ERROR, "expr.illegalEnd", wr.current().text());
 				return NaE.resolveFailed();
 			}
 
@@ -1191,7 +1202,7 @@ public final class ExprParser {
 
 	private static void ue(LavaTokenizer wr, String wd, String except) throws ParseException { throw wr.err("unexpected_2:[\""+wd+"\","+except+"]"); }
 	private void exceptingStopWord(String val, int flag) {
-		var sb = IOUtil.getSharedCharBuf().append("unexpected_2:[\"").append(val).append("\",\"");
+		var sb = IOUtil.getSharedCharBuf();
 		if ((flag&STOP_SEMICOLON) != 0) sb.append(';');
 		if ((flag&STOP_RSB) != 0) sb.append(')');
 		if ((flag&STOP_RMB) != 0) sb.append(']');
@@ -1199,7 +1210,7 @@ public final class ExprParser {
 		if ((flag&STOP_RLB) != 0) sb.append('}');
 		if ((flag&STOP_COLON) != 0) sb.append(':');
 		if ((flag&STOP_LAMBDA) != 0) sb.append("->");
-		ctx.report(Kind.ERROR, sb.append("\"]").toString());
+		ctx.report(Kind.ERROR, "unexpected_2", val, sb.toString());
 	}
 
 	public int binaryOperatorPriority(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1) & 1023;}

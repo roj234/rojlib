@@ -13,7 +13,7 @@ import roj.compiler.CompileUnit;
 import roj.compiler.LavaCompiler;
 import roj.compiler.LavaTokenizer;
 import roj.compiler.api.MethodDefault;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
@@ -76,7 +76,7 @@ public interface ParseTask {
 		return (ctx) -> {
 			ctx.errorReportIndex = index;
 			ctx.setMethod(file.getStaticInit().method);
-			attr.val = AnnotationPrimer.toAnnVal(ctx, (Expr) expr, mn.returnType());
+			attr.val = AnnotationBuilder.evaluate(ctx, (Expr) expr, mn.returnType());
 			ctx.errorReportIndex = -1;
 		};
 	}

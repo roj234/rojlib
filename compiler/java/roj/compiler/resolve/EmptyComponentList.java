@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
+import roj.compiler.diagnostic.IText;
 
 import java.util.Collections;
 import java.util.List;
@@ -18,5 +19,5 @@ final class EmptyComponentList extends ComponentList {
 
 	@Override public MethodResult findMethod(CompileContext ctx, IType that, List<IType> params, Map<String, IType> namedType, int flags) {return null;}
 	@Override public List<MethodNode> getMethods() {return Collections.emptyList();}
-	@Override public @NotNull FieldResult findField(CompileContext ctx, int flags) {return new FieldResult("NoSuchField");}
+	@Override public @NotNull FieldResult findField(CompileContext ctx, int flags) {return new FieldResult(IText.translatable("symbol.noSuchField"));}
 }

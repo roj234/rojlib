@@ -1,7 +1,9 @@
 package roj.asm.attr;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Attributed;
+import roj.asm.ClassNode;
 import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.cp.Constant;
@@ -69,12 +71,12 @@ public abstract class Attribute {
 		CUSTOM_ATTRIBUTE.put(id.name, Helpers.cast(deserializer));
 	}
 
-	public static void parseAll(Attributed node, ConstantPool cp, AttributeList list, int origin) {
+	public static void parseAll(Attributed node, ClassNode owner, AttributeList list, int origin) {
 		for (int i = 0; i < list.size(); i++) {
 			Attribute attr = list.get(i);
 			if (attr.getClass() == UnparsedAttribute.class && attr.getRawData() != null) {
 				DynByteBuf data = attr.getRawData();
-				attr = parse(node, cp, attr.name(), data, origin);
+				attr = parse(node, owner.cp, owner, attr.name(), data, origin);
 				if (attr == null) continue;
 				list.set(i, attr);
 			}
@@ -82,27 +84,27 @@ public abstract class Attribute {
 	}
 
 	@SuppressWarnings("unchecked")
-	public static <T extends Attribute> T parseSingle(Attributed node, ConstantPool cp, TypedKey<T> type, AttributeList list, int origin) {
+	public static <T extends Attribute> T parseSingle(Attributed node, ClassNode owner, TypedKey<T> type, AttributeList list, int origin) {
 		if (list == null) return null;
 		Attribute attr = (Attribute) list.getByName(type.name);
 		if (attr == null) return null;
 		if (attr.getClass() == UnparsedAttribute.class) {
-			if (hasError || cp == null) return null;
+			if (owner == null) return null;
 			// FIXME (lava) Thread safe for read-only access
-			attr = parse(node, cp, type.name, attr.getRawData(), origin);
+			attr = parse(node, owner.cp, owner, type.name, attr.getRawData(), origin);
 			if (attr == null) throw new UnsupportedOperationException("不支持的属性");
 			list.add(attr);
 		}
 		return (T) attr;
 	}
 
-	private static boolean hasError;
-	public static Attribute parse(Attributed node, ConstantPool cp, String name, DynByteBuf data,
-								  @MagicConstant(intValues = {
-										  Signature.CLASS,Signature.FIELD,Signature.METHOD,roj.asm.insn.Code.ATTR_CODE,RecordAttribute.ATTR_RECORD
-								  }) int origin) {
-		if (hasError) return null;
-
+	public static Attribute parse(
+			Attributed node, ConstantPool cp, @Nullable ClassNode owner,
+			String name, DynByteBuf data,
+			@MagicConstant(intValues = {
+					Signature.CLASS,Signature.FIELD,Signature.METHOD,roj.asm.insn.Code.ATTR_CODE,RecordAttribute.ATTR_RECORD
+			}) int origin
+	) {
 		int len = data.rIndex;
 		try {
 			switch (name) {
@@ -116,7 +118,9 @@ public abstract class Attribute {
 				case "RuntimeInvisibleAnnotations": return new Annotations(name, data, cp);
 				case "RuntimeVisibleParameterAnnotations":
 				case "RuntimeInvisibleParameterAnnotations": return new ParameterAnnotations(name, data, cp);
-				case "Signature": return Signature.parse(((CstUTF) cp.resolve(data)).str(), origin);
+				case "Signature":
+					Signature parent = owner == node || owner == null ? null : owner.getAttribute(SIGNATURE);
+					return Signature.parse(((CstUTF) cp.resolve(data)).str(), origin, parent);
 				case "Synthetic": case "Deprecated": break;
 				// method only
 				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
@@ -143,14 +147,14 @@ public abstract class Attribute {
 				case "SourceDebugExtension": break;
 			}
 		} catch (Throwable e) {
-			hasError = true;
 			String str;
 			try {
+				node.attributes().clear();
 				str = node.toString();
 			} catch (Throwable ex) {
-				str = ex.toString();
+				str = "<toString() failed>";
+				e.addSuppressed(ex);
 			}
-			hasError = false;
 			data.rIndex = len;
 			throw new IllegalStateException("无法读取"+str+"的属性'"+name+"',长度为"+data.readableBytes()+",数据:"+data.dump(), e);
 		}

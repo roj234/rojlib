@@ -8,7 +8,7 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.UnparsedAttribute;
 import roj.compiler.CompileContext;
 import roj.compiler.api.Processor;
-import roj.compiler.asm.AnnotationPrimer;
+import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.diagnostic.Kind;
 import roj.util.ByteList;
 
@@ -27,7 +27,7 @@ public class JavaLangAnnotations implements Processor {
 
 	@Override
 	public void handle(CompileContext ctx, ClassDefinition file, Attributed node, Annotation a) {
-		var annotation = (AnnotationPrimer) a;
+		var annotation = (AnnotationBuilder) a;
 		switch (annotation.type()) {
 			case "java/lang/Override" -> {
 				if (annotation.raw() != Collections.EMPTY_MAP) {

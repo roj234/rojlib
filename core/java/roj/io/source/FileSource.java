@@ -55,8 +55,9 @@ public class FileSource extends Source {
 	public void put(Source src, long offset, long len) throws IOException {
 		if (src instanceof FileSource fs) {
 			fs.io.getChannel().transferTo(offset, len, io.getChannel());
+		} else {
+			super.put(src, offset, len);
 		}
-		super.put(src, offset, len);
 	}
 
 	@Override

@@ -5,10 +5,7 @@ import roj.asm.ClassUtil;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
-import roj.asm.type.IType;
-import roj.asm.type.ParameterizedType;
-import roj.asm.type.Signature;
-import roj.asm.type.Type;
+import roj.asm.type.*;
 import roj.asmx.ParamNameMapper;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
@@ -20,6 +17,7 @@ import roj.compiler.LavaCompiler;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.ast.expr.Expr;
+import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -28,6 +26,8 @@ import roj.util.Helpers;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+
+import static roj.compiler.diagnostic.IText.*;
 
 /**
  * @author Roj234
@@ -54,7 +54,7 @@ final class MethodList extends ComponentList {
 		list.add(mn);
 
 		methods.add(mn);
-		mn.getAttribute(klass.cp(), Attribute.SIGNATURE);
+		mn.getAttribute(klass, Attribute.SIGNATURE);
 	}
 
 	/**
@@ -123,7 +123,7 @@ final class MethodList extends ComponentList {
 				// 如果加起来都不够，那么一定不够
 				if (namedArguments.size() + defaultArguments.size() < missedArguments) continue;
 
-				List<String> paramNames = ParamNameMapper.getParameterNames(this.owner.cp(), method);
+				List<String> paramNames = ParamNameMapper.getParameterNames(this.owner.cp, method);
 				if (paramNames.size() != declaredArguments.size()) {
 					ctx.report(Kind.INTERNAL_ERROR, "invoke.warn.illegalNameList", method);
 					return null;
@@ -182,48 +182,53 @@ final class MethodList extends ComponentList {
 			}
 		}
 
+
 		String name = methods.get(0).name();
 		boolean isConstructor = name.equals("<init>");
 		if (isConstructor) name = owner.name().substring(owner.name().lastIndexOf('/')+1);
 
 		if (!dup.isEmpty()) {
-			CharList sb = new CharList().append("invoke.compatible.plural:[\"").append(name).append("\",[");
+			IText infoList = getFoundText(actualArguments).prepend("  ").append("\n  ");
 
-			appendInput(actualArguments, sb);
-
-			sb.append("\"  \",\"").append(best.method.owner()).append("\",invoke.method,\"").append(name).append("(\",");
-			getArg(best.method, that, sb).append("\")\",");
+			infoList.append(renderMethod(best.method, isConstructor));
 
 			for (MethodNode mn : dup) {
-				sb.append("\" \",and,\"\n  \",\"").append(mn.owner()).append("\",invoke.method,\"").append(name).append("(\",");
-				getArg(mn, that, sb).append("\")\",");
+				infoList.append(translatable("and")).append("\n  ").append(renderMethod(mn, isConstructor));
 			}
+			infoList.append(translatable("invoke.matches"));
 
-			ctx.report(Kind.ERROR, sb.replace('/', '.').append("\" \",invoke.matches]").toStringAndFree());
+			// ambiguous
+			ctx.report(Kind.ERROR, "invoke.compatible.plural", name, infoList);
 		} else if (best == null) {
+			// 不匹配 (No match)
 			if ((flags & NO_REPORT) != 0) return null;
 
-			CharList sb = new CharList().append("invoke.incompatible.plural:[[\"").append(name).append("(\",");
+			// 参数列表输入
+			IText inputPart = literal(name).append("(").append(renderParameters(actualArguments)).append(")");
 
-			if (actualArguments.isEmpty()) sb.append("invoke.no_param");
-			else sb.append('"').append(TextUtil.join(actualArguments, ",")).append('"');
-			sb.append(",\")\"],[");
-
+			// 候选者列表
+			IText candidateList = empty();
 			ctx.enableErrorCapture();
-
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				if (isConstructor) sb.append("\"  \",invoke.constructor,\"").append(mn.owner());
-				else sb.append("\"  \",invoke.method,\"").append(mn.owner()).append('.').append(mn.name());
-				getArg(mn, that, sb.append("\",\"(\",")).append("\")\",invoke.notApplicable,\"\n    \",");
 
-				getErrorMsg(ctx, that, actualArguments, (flags&IN_STATIC) != 0, mn, sb.append("\"(\","), ctx.getCapturedError());
-				sb.append("\")\n\",");
+				IText line = literal("  ").append(renderMethod(mn, isConstructor))
+					.append(translatable("invoke.notApplicable")).append("\n    (");
+
+				var info = ctx.compiler.resolve(mn.owner());
+				if (ctx.canAccessSymbol(info, mn, (flags & IN_STATIC) != 0, true)) {
+					line.append(getReason(mn, that, ctx.inferrer.resolveInvocation(info, mn, that, actualArguments)));
+				}
+
+				IText captured = ctx.getCapturedError();
+				if (captured != null) line.append(captured);
+
+				line.append(")\n");
+				candidateList.append(line);
 			}
-			sb.set(sb.length()-1, ']');
-
 			ctx.disableErrorCapture();
-			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+
+			ctx.report(Kind.ERROR, "invoke.incompatible.plural", inputPart, candidateList);
 		} else {
 			checkDeprecation(ctx, owner, best.method);
 			checkBridgeMethod(ctx, best);
@@ -232,45 +237,60 @@ final class MethodList extends ComponentList {
 		return best;
 	}
 
-	private static void getErrorMsg(CompileContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
-		var info = ctx.compiler.resolve(mn.owner());
-		if (ctx.canAccessSymbol(info, mn, in_static, true)) {
-			appendError(ctx.inferrer.resolveInvocation(info, mn, genericHint, params), sb);
-		}
-		if (errRpt.length() > 0) {
-			sb.append(errRpt).append(',');
-			errRpt.clear();
-		}
-	}
+	static IText getFoundText(List<IType> params) {return translatable("invoke.found").append(renderParameters(params));}
 
-	static void appendError(MethodResult mr, CharList sb) {
-		if (mr.distance > 0) return;
-		sb.append("typeCast.error.").append(mr.distance);
-		if (mr.error != null && mr.error.length == 3)
-			sb.append(":[\"").append(mr.error[0]).append("\",\"").append(mr.error[1]).append("\"]");
-		sb.append(',');
+	static IText renderMethod(MethodNode mn, boolean isConstructor) {
+		String owner = mn.owner().replace('/', '.');
+		String sign = isConstructor ? "" : "." + mn.name();
+		return translatable(isConstructor ? "invoke.constructor" : "invoke.method")
+				.append(owner).append(sign)
+				.append("(").append(renderParameters(mn)).append(")");
 	}
-	static void appendInput(List<IType> params, CharList sb) {
-		sb.append("\"  \",invoke.found,\" \",");
-		if (params.isEmpty()) sb.append("invoke.no_param");
-		else sb.append('"').append(TextUtil.join(params, ",")).append('"');
-		sb.append(",\"\n\",");
-	}
-	static CharList getArg(MethodNode mn, IType that, CharList sb) {
+	static IText renderParameters(MethodNode mn) {
 		Signature sign = mn.getAttribute(null, Attribute.SIGNATURE);
 		List<? extends IType> params = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
-		if (params.isEmpty()) return sb.append("invoke.no_param,");
+		return renderParameters(params);
+	}
+	static IText renderParameters(List<? extends IType> params) {
+		if (params.isEmpty()) return translatable("invoke.no_param");
 
-		var myList = that instanceof ParameterizedType g ? g.typeParameters : Collections.emptyList();
+		IText root = IText.empty();
 		int i = 0;
 		while (true) {
-			sb.append('"').append(params.get(i)).append("\",");
-			if (i < myList.size()) sb.append(",invoke.generic.s,\"").append(myList.get(i)).append("\",invoke.generic.e,");
+			root.append(literal(params.get(i)));
 			if (++i == params.size()) break;
-			sb.append("\",\",");
+			root.append(", ");
 		}
 
-		return sb;
+		return root;
+	}
+
+	static IText getReason(MethodNode mn, IType that, MethodResult mr) {
+		if (mr.distance > 0) return IText.empty();
+
+		Map<TypeVariableDeclaration, IType> substitutionMap = Collections.emptyMap();
+		if (that instanceof ParameterizedType g) {
+			List<IType> typeParams = g.typeParameters;
+			Signature signature = CompileContext.get().resolve(mn.owner()).getAttribute(Attribute.SIGNATURE);
+			if (signature != null) {
+				substitutionMap = Inferrer.createSubstitutionMap(signature.typeVariables, typeParams);
+			}
+		}
+
+		String key = "typeCast.error."+mr.distance;
+		if (mr.error != null && mr.error.length == 3) {
+			Object left = mr.error[0];
+			Object right = mr.error[1];
+			if (left instanceof IType type) {
+				left = Inferrer.substituteTypeVariables(type, substitutionMap);
+			}
+			if (right instanceof IType type) {
+				right = Inferrer.substituteTypeVariables(type, substitutionMap);
+			}
+
+			return translatable("invoke.paramIndex", (int) (mr.error[2]) + 1).append(translatable(key, left, right));
+		}
+		return translatable(key);
 	}
 
 	@Override

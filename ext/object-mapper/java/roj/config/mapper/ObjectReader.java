@@ -13,6 +13,7 @@ import roj.util.DynByteBuf;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 
 /**
  * An object reader that deserializes an instance of type {@code T} by receiving emitted values/events
@@ -52,6 +53,27 @@ public interface ObjectReader<T> extends ValueEmitter {
 		Parser p = parser.parser();
 		if (!(p instanceof TextParser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		tp.parse(in, reset());return get();
+	}
+	@StaticMethod
+	default T read(File in, ConfigMaster factory, Charset charset) throws IOException, ParseException {
+		var parser = factory.parser();
+		if (parser instanceof TextParser tp) tp.charset = charset;
+		parser.parse(in, reset());
+		return get();
+	}
+	@StaticMethod
+	default T read(DynByteBuf in, ConfigMaster factory, Charset charset) throws IOException, ParseException {
+		var parser = factory.parser();
+		if (parser instanceof TextParser tp) tp.charset = charset;
+		parser.parse(in, reset());
+		return get();
+	}
+	@StaticMethod
+	default T read(InputStream in, ConfigMaster factory, Charset charset) throws IOException, ParseException {
+		var parser = factory.parser();
+		if (parser instanceof TextParser tp) tp.charset = charset;
+		parser.parse(in, reset());
+		return get();
 	}
 
 	/**

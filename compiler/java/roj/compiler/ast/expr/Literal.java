@@ -59,20 +59,17 @@ final class Literal extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {throw OperationDone.NEVER;}
 	@Override
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		switch (cast.type) {
-			case TypeCast.LOSSY, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
-				char targetPrimitiveType;
-				if (cast.getOp1() == 0) targetPrimitiveType = 'I';
-				else {
-					targetPrimitiveType = Opcodes.toString(cast.getOp1()).charAt(2);
-					if (targetPrimitiveType == 'L') targetPrimitiveType = 'J';
-				}
-				writePrimitive(cw, Math.max(Type.SORT_INT, Type.getSort(targetPrimitiveType)));
-				if (cast.type == TypeCast.BOXING)
-					cast.writeBox(cw);
+		if (cast.getOp1() != 0) {
+			/*switch (cast.type) {
+				case TypeCast.LOSSY, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {}
+			}*/
+			char targetPrimitiveType = Opcodes.toString(cast.getOp1()).charAt(2);
+			if (targetPrimitiveType == 'L') targetPrimitiveType = 'J';
+			writePrimitive(cw, Math.max(Type.SORT_INT, Type.getSort(targetPrimitiveType)));
+			if (cast.type == TypeCast.BOXING)
+				cast.writeBox(cw);
 
-				return;
-			}
+			return;
 		}
 		if (cast.type == TypeCast.IMPLICIT) {
 			int value = ((ConfigValue) c).asInt();

@@ -309,7 +309,7 @@ public final class MCMake {
 
 		c.register(literal("reload").executes(ctx -> loadEnv()));
 
-		c.register(literal("zip").then(argument("路径", Argument.file()).executes(ctx -> {
+		c.register(literal("zipclean").then(argument("路径", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("路径", File.class);
 			if (file.getName().endsWith(".7z")) {
 				try (var qz = new SevenZFile(new FileSource(file))) {
@@ -362,7 +362,7 @@ public final class MCMake {
 			System.out.println("按ForgeGradle每次构建至少需要30秒计算, MCMake至少为你节约了 "+myTime(timeWasted-buildTimes));
 		}));
 
-		c.register(literal("fuck_javac").then(argument("version", Argument.number(6, JVM.VERSION)).then(argument("jarFile", Argument.file()).executes(ctx -> {
+		c.register(literal("downgrade").then(argument("version", Argument.number(6, JVM.VERSION)).then(argument("jarFile", Argument.file()).executes(ctx -> {
 			var targetVersion = ClassNode.JavaVersion(ctx.argument("version", Integer.class));
 			var targetJar = ctx.argument("jarFile", File.class);
 			try (var za = new ZipEditor(targetJar)) {
@@ -376,6 +376,8 @@ public final class MCMake {
 				za.save();
 			}
 		}))));
+
+		//c.register(literal("run").then(argument("artifact", )))
 
 		runScript();
 

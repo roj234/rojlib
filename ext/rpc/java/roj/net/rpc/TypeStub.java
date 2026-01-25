@@ -64,8 +64,8 @@ final class TypeStub {
 			remoteMethod.className = type.getName();
 			remoteMethod.methodName = method.name();
 
-			Signature sign = method.getSignature(node.cp);
-			sign.values.replaceAll(t -> RuntimeTypeInference.substituteTypeVariables(t, typeVariable -> sign.typeVariables.get(typeVariable.name).get(0)));
+			Signature sign = method.getSignature(node);
+			sign.values.replaceAll(t -> RuntimeTypeInference.substituteTypeVariables(t, typeVariable -> sign.typeVariables.get(typeVariable.name()).get(0)));
 
 			remoteMethod.argumentTypes = sign.values;
 			remoteMethod.returnType = sign.values.remove(sign.values.size() - 1);
