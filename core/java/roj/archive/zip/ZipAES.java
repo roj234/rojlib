@@ -35,7 +35,7 @@ final class ZipAES extends FeedbackCipher {
 	byte[] salt;
 
 	public ZipAES() {
-		super(CryptoFactory.AES(), MODE_CTR);
+		super(getInstance("AES/ECB/NoPadding"), MODE_CTR);
 		hmac = new HMAC(CryptoFactory.getMessageDigest("SHA-1"));
 	}
 

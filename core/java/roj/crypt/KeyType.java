@@ -75,7 +75,7 @@ public class KeyType {
 			cos.write(iv);
 
 			pass = CryptoFactory.HKDF_HmacSha256(pass, null, 32);
-			FeedbackCipher c = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
+			var c = RCipher.getInstance("AES/CTR/NoPadding");
 
 			c.init(true, pass, new IvParameterSpecNC(iv), null);
 			cos = new CipherOutputStream(cos, c);
@@ -110,7 +110,7 @@ public class KeyType {
 			IOUtil.readFully(cis, iv);
 
 			pass = CryptoFactory.HKDF_HmacSha256(pass, null, 32);
-			FeedbackCipher c = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
+			var c = RCipher.getInstance("AES/CTR/NoPadding");
 			c.init(false, pass, new IvParameterSpecNC(iv), null);
 			cis = new CipherInputStream(cis, c);
 		}

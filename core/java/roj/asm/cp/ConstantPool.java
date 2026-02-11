@@ -319,7 +319,7 @@ public final class ConstantPool {
 			default -> throw new IllegalArgumentException("不支持的常量类型"+c.type()+" "+c.getClass().getName());
 		}
 
-		if (!refMap.isEmpty()) {
+		if (refMap != null && !refMap.isEmpty()) {
 			refMap.ensureCapacity(size);
 			refMap.add(c);
 		}

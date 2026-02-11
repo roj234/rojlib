@@ -27,12 +27,11 @@ final class ChaCha_Poly1305 extends RCipher {
 	private boolean decrypt;
 	private byte state;
 
-	ChaCha_Poly1305() {this(new ChaCha());}
 	ChaCha_Poly1305(ChaCha c) { this.c = c; }
 
 	public final void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		c.init(encrypt, key, par, random);
-		this.decrypt = encrypt == false;
+		this.decrypt = !encrypt;
 	}
 
 	public int engineGetOutputSize(int data) { return decrypt ? data - 16 : data + 16; }
@@ -48,7 +47,7 @@ final class ChaCha_Poly1305 extends RCipher {
 		int count = in.readableBytes();
 		if (decrypt) {
 			if ((count -= 16) <= 0) return;
-			if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
+			if (out.writableBytes() < count) throw new ShortBufferException();
 
 			in.wIndex(in.wIndex() - 16);
 
@@ -107,7 +106,6 @@ final class ChaCha_Poly1305 extends RCipher {
 	private void cryptBegin() {
 		var c = this.c;
 
-		c.incrIV();
 		c.reset();
 		c.KeyStream();
 
@@ -125,5 +123,8 @@ final class ChaCha_Poly1305 extends RCipher {
 		ByteList tb = tmp; tb.clear();
 		tb.putLongLE(lenAAD).putLongLE(processed);
 		p.update(tb.list, 0, 16);
+
+		c.incrIV();
+		state = 1;
 	}
 }

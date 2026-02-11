@@ -215,7 +215,7 @@ public class SizeVisitor {
 
 		for (int i = 0; i < exceptionHandlers.size(); i += 3) {
 			var handler = exceptionHandlers.get(i+2);
-			maxEntryHeights.put(handler, 0);
+			maxEntryHeights.put(handler, 1);
 			changeset.add(handler);
 		}
 

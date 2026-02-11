@@ -42,7 +42,8 @@ public final class Ferned extends RCipher implements SeekableCipher {
 	private boolean encrypt;
 	private long sector;
 
-	public Ferned(int sectorSize) {this(CryptoFactory.AES(), CryptoFactory.Poly1305(), sectorSize);}
+	public Ferned(int sectorSize) {
+		this(getInstance("AES/ECB/NoPadding"), CryptoFactory.Poly1305(), sectorSize);}
 	private Ferned(RCipher aes, MessageAuthenticCode poly1305, int sectorSize) {
 		hIn = DynByteBuf.allocate(16, 16);
 		hOut = DynByteBuf.wrap(hIn.array(), 0, 16);

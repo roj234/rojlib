@@ -155,7 +155,7 @@ public class TextUtil {
 		throw new IllegalArgumentException("Not a hex character '"+c+"'");
 	}
 
-	public static byte[] hex2bytes(String str) { return hex2bytes(str, IOUtil.getSharedByteBuf()).toByteArray(); }
+	public static byte[] hex2bytes(CharSequence str) { return hex2bytes(str, IOUtil.getSharedByteBuf()).toByteArray(); }
 	public static DynByteBuf hex2bytes(CharSequence hex, DynByteBuf bytes) {
 		bytes.ensureCapacity(bytes.wIndex() + (hex.length() >> 1));
 

@@ -103,7 +103,10 @@ public final class Lambda extends Expr {
 	}
 
 	@Override
-	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
+	protected void write1(MethodWriter cw, TypeCast.@NotNull Cast cast) {throw new AssertionError("Should not reach here");}
+
+	@Override
+	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		var ctx = CompileContext.get();
 		if (cast.getTarget() == null) {
 			ctx.report(this, Kind.ERROR, "type.cannotInfer", IText.translatable("type.lambda"));

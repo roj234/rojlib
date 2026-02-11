@@ -4,28 +4,22 @@ import roj.text.TextUtil;
 
 import java.util.Arrays;
 
-import static roj.crypt.eddsa.EdPoint.NUMS;
+import static roj.crypt.eddsa.EdPoint.MC;
 
 final class EdInteger {
-	public static final EdInteger ZERO = new EdInteger(new int[10]), ONE;
-	static {
-		var b = new int[10];
-		b[0] = 1;
-		ONE = new EdInteger(b);
-	}
-
+	public static final EdInteger ZERO = of(0), ONE = of(1);
 	public static EdInteger of(int i) {
 		int[] t1 = new int[10];
 		t1[0] = i;
 		return new EdInteger(t1);
 	}
 
-	private final int[] t;
+	final int[] limbs;
 	private transient boolean mutable;
 
-	public EdInteger(int[] t) {
-		if (t.length != 10) throw new IllegalArgumentException("Invalid radix-2^51 representation");
-		this.t = t;
+	public EdInteger(int[] limbs) {
+		if (limbs.length != 10) throw new IllegalArgumentException("Invalid radix-2^51 representation");
+		this.limbs = limbs;
 	}
 
 	private static int load_3(byte[] in, int offset) {
@@ -76,12 +70,20 @@ final class EdInteger {
 		long carry6 = h6 + 0x2000000L >> 26;
 		long carry8 = h8 + 0x2000000L >> 26;
 
-		int[] h = new int[] {(int) h0, (int) h1, (int) h2, (int) h3, (int) (h4 - (carry4 << 26)), (int) (h5 + carry4), (int) (h6 - (carry6 << 26)), (int) (h7 + carry6), (int) (h8 - (carry8 << 26)), (int) (h9 + carry8)};
+		int[] h = new int[] {
+				(int) h0, (int) h1, (int) h2, (int) h3,
+				(int) (h4 - (carry4 << 26)),
+				(int) (h5 + carry4),
+				(int) (h6 - (carry6 << 26)),
+				(int) (h7 + carry6),
+				(int) (h8 - (carry8 << 26)),
+				(int) (h9 + carry8)
+		};
 		return new EdInteger(h);
 	}
 
 	public byte[] toByteArray() {
-		int[] h = t;
+		int[] h = limbs;
 		int h0 = h[0];
 		int h1 = h[1];
 		int h2 = h[2];
@@ -119,9 +121,28 @@ final class EdInteger {
 		int carry7 = (h7 += carry6) >> 25;
 		int carry8 = (h8 += carry7) >> 26;
 		int carry9 = (h9 += carry8) >> 25;
-		return new byte[] {(byte) h0, (byte) (h0 >> 8), (byte) (h0 >> 16), (byte) (h0 >> 24 | h1 << 2), (byte) (h1 >> 6), (byte) (h1 >> 14), (byte) (h1 >> 22 | h2 << 3), (byte) (h2 >> 5), (byte) (h2 >> 13), (byte) (h2 >> 21 | h3 << 5), (byte) (h3 >> 3), (byte) (h3 >> 11), (byte) (h3 >> 19 | h4 << 6), (byte) (h4 >> 2), (byte) (h4 >> 10), (byte) (h4 >> 18), (byte) h5, (byte) (h5 >> 8),
-						   (byte) (h5 >> 16), (byte) (h5 >> 24 | (h6 -= carry6 << 26) << 1), (byte) (h6 >> 7), (byte) (h6 >> 15), (byte) (h6 >> 23 | (h7 -= carry7 << 25) << 3), (byte) (h7 >> 5), (byte) (h7 >> 13), (byte) (h7 >> 21 | (h8 -= carry8 << 26) << 4), (byte) (h8 >> 4), (byte) (h8 >> 12), (byte) (h8 >> 20 | (h9 -= carry9 << 25) << 6), (byte) (h9 >> 2), (byte) (h9 >> 10),
-						   (byte) (h9 >> 18)};
+		return new byte[] {
+				(byte) h0, (byte) (h0 >> 8), (byte) (h0 >> 16),
+				(byte) (h0 >> 24 | h1 << 2),
+				(byte) (h1 >> 6), (byte) (h1 >> 14),
+				(byte) (h1 >> 22 | h2 << 3),
+				(byte) (h2 >> 5), (byte) (h2 >> 13),
+				(byte) (h2 >> 21 | h3 << 5),
+				(byte) (h3 >> 3), (byte) (h3 >> 11),
+				(byte) (h3 >> 19 | h4 << 6),
+				(byte) (h4 >> 2), (byte) (h4 >> 10),
+				(byte) (h4 >> 18), (byte) h5,
+				(byte) (h5 >> 8), (byte) (h5 >> 16),
+				(byte) (h5 >> 24 | (h6 -= carry6 << 26) << 1),
+				(byte) (h6 >> 7), (byte) (h6 >> 15),
+				(byte) (h6 >> 23 | (h7 -= carry7 << 25) << 3),
+				(byte) (h7 >> 5), (byte) (h7 >> 13),
+				(byte) (h7 >> 21 | (h8 -= carry8 << 26) << 4),
+				(byte) (h8 >> 4), (byte) (h8 >> 12),
+				(byte) (h8 >> 20 | (h9 -= carry9 << 25) << 6),
+				(byte) (h9 >> 2), (byte) (h9 >> 10),
+				(byte) (h9 >> 18)
+		};
 	}
 
 	public static byte[] scalar_mod_inline(byte[] s) {
@@ -739,7 +760,7 @@ final class EdInteger {
 
 	public boolean isNonZero() { return !equals(ZERO); }
 	public boolean isNegative() {
-		int[] h = t;
+		int[] h = limbs;
 		int h0 = h[0];
 		int h9 = h[9];
 
@@ -763,27 +784,27 @@ final class EdInteger {
 
 	public EdInteger add1() { return add(ONE); }
 	public EdInteger add(EdInteger val) {
-		int[] h = mutable ? t : new int[10];
-		for (int i = 0; i < 10; ++i) h[i] = t[i] + val.t[i];
+		int[] h = mutable ? limbs : new int[10];
+		for (int i = 0; i < 10; ++i) h[i] = limbs[i] + val.limbs[i];
 		return mutable ? this : new EdInteger(h);
 	}
 
 	public EdInteger sub1() { return sub(ONE); }
 	public EdInteger sub(EdInteger val) {
-		int[] h = mutable ? t : new int[10];
-		for (int i = 0; i < 10; ++i) h[i] = t[i] - val.t[i];
+		int[] h = mutable ? limbs : new int[10];
+		for (int i = 0; i < 10; ++i) h[i] = limbs[i] - val.limbs[i];
 		return mutable ? this : new EdInteger(h);
 	}
 
 	public EdInteger neg() {
-		int[] h = mutable ? t : new int[10];
-		for (int i = 0; i < 10; ++i) h[i] = -t[i];
+		int[] h = mutable ? limbs : new int[10];
+		for (int i = 0; i < 10; ++i) h[i] = -limbs[i];
 		return mutable ? this : new EdInteger(h);
 	}
 
-	public EdInteger div(EdInteger val) { return mul(NUMS.get().a.set(this).invert()); }
+	public EdInteger div(EdInteger val) { return mul(MC.get().invsafe1.set(val).invert()); }
 	public EdInteger mul(EdInteger val) {
-		int[] g = val.t;
+		int[] g = val.limbs;
 		int g1_19 = 19 * g[1];
 		int g2_19 = 19 * g[2];
 		int g3_19 = 19 * g[3];
@@ -793,110 +814,110 @@ final class EdInteger {
 		int g7_19 = 19 * g[7];
 		int g8_19 = 19 * g[8];
 		int g9_19 = 19 * g[9];
-		int f1_2 = 2 * this.t[1];
-		int f3_2 = 2 * this.t[3];
-		int f5_2 = 2 * this.t[5];
-		int f7_2 = 2 * this.t[7];
-		int f9_2 = 2 * this.t[9];
-		long f0g0 = (long)this.t[0] * g[0];
-		long f0g1 = (long)this.t[0] * g[1];
-		long f0g2 = (long)this.t[0] * g[2];
-		long f0g3 = (long)this.t[0] * g[3];
-		long f0g4 = (long)this.t[0] * g[4];
-		long f0g5 = (long)this.t[0] * g[5];
-		long f0g6 = (long)this.t[0] * g[6];
-		long f0g7 = (long)this.t[0] * g[7];
-		long f0g8 = (long)this.t[0] * g[8];
-		long f0g9 = (long)this.t[0] * g[9];
-		long f1g0 = (long)this.t[1] * g[0];
+		int f1_2 = 2 * this.limbs[1];
+		int f3_2 = 2 * this.limbs[3];
+		int f5_2 = 2 * this.limbs[5];
+		int f7_2 = 2 * this.limbs[7];
+		int f9_2 = 2 * this.limbs[9];
+		long f0g0 = (long)this.limbs[0] * g[0];
+		long f0g1 = (long)this.limbs[0] * g[1];
+		long f0g2 = (long)this.limbs[0] * g[2];
+		long f0g3 = (long)this.limbs[0] * g[3];
+		long f0g4 = (long)this.limbs[0] * g[4];
+		long f0g5 = (long)this.limbs[0] * g[5];
+		long f0g6 = (long)this.limbs[0] * g[6];
+		long f0g7 = (long)this.limbs[0] * g[7];
+		long f0g8 = (long)this.limbs[0] * g[8];
+		long f0g9 = (long)this.limbs[0] * g[9];
+		long f1g0 = (long)this.limbs[1] * g[0];
 		long f1g1_2 = (long)f1_2 * g[1];
-		long f1g2 = (long)this.t[1] * g[2];
+		long f1g2 = (long)this.limbs[1] * g[2];
 		long f1g3_2 = (long)f1_2 * g[3];
-		long f1g4 = (long)this.t[1] * g[4];
+		long f1g4 = (long)this.limbs[1] * g[4];
 		long f1g5_2 = (long)f1_2 * g[5];
-		long f1g6 = (long)this.t[1] * g[6];
+		long f1g6 = (long)this.limbs[1] * g[6];
 		long f1g7_2 = (long)f1_2 * g[7];
-		long f1g8 = (long)this.t[1] * g[8];
+		long f1g8 = (long)this.limbs[1] * g[8];
 		long f1g9_38 = (long)f1_2 * g9_19;
-		long f2g0 = (long)this.t[2] * g[0];
-		long f2g1 = (long)this.t[2] * g[1];
-		long f2g2 = (long)this.t[2] * g[2];
-		long f2g3 = (long)this.t[2] * g[3];
-		long f2g4 = (long)this.t[2] * g[4];
-		long f2g5 = (long)this.t[2] * g[5];
-		long f2g6 = (long)this.t[2] * g[6];
-		long f2g7 = (long)this.t[2] * g[7];
-		long f2g8_19 = (long)this.t[2] * g8_19;
-		long f2g9_19 = (long)this.t[2] * g9_19;
-		long f3g0 = (long)this.t[3] * g[0];
+		long f2g0 = (long)this.limbs[2] * g[0];
+		long f2g1 = (long)this.limbs[2] * g[1];
+		long f2g2 = (long)this.limbs[2] * g[2];
+		long f2g3 = (long)this.limbs[2] * g[3];
+		long f2g4 = (long)this.limbs[2] * g[4];
+		long f2g5 = (long)this.limbs[2] * g[5];
+		long f2g6 = (long)this.limbs[2] * g[6];
+		long f2g7 = (long)this.limbs[2] * g[7];
+		long f2g8_19 = (long)this.limbs[2] * g8_19;
+		long f2g9_19 = (long)this.limbs[2] * g9_19;
+		long f3g0 = (long)this.limbs[3] * g[0];
 		long f3g1_2 = (long)f3_2 * g[1];
-		long f3g2 = (long)this.t[3] * g[2];
+		long f3g2 = (long)this.limbs[3] * g[2];
 		long f3g3_2 = (long)f3_2 * g[3];
-		long f3g4 = (long)this.t[3] * g[4];
+		long f3g4 = (long)this.limbs[3] * g[4];
 		long f3g5_2 = (long)f3_2 * g[5];
-		long f3g6 = (long)this.t[3] * g[6];
+		long f3g6 = (long)this.limbs[3] * g[6];
 		long f3g7_38 = (long)f3_2 * g7_19;
-		long f3g8_19 = (long)this.t[3] * g8_19;
+		long f3g8_19 = (long)this.limbs[3] * g8_19;
 		long f3g9_38 = (long)f3_2 * g9_19;
-		long f4g0 = (long)this.t[4] * g[0];
-		long f4g1 = (long)this.t[4] * g[1];
-		long f4g2 = (long)this.t[4] * g[2];
-		long f4g3 = (long)this.t[4] * g[3];
-		long f4g4 = (long)this.t[4] * g[4];
-		long f4g5 = (long)this.t[4] * g[5];
-		long f4g6_19 = (long)this.t[4] * g6_19;
-		long f4g7_19 = (long)this.t[4] * g7_19;
-		long f4g8_19 = (long)this.t[4] * g8_19;
-		long f4g9_19 = (long)this.t[4] * g9_19;
-		long f5g0 = (long)this.t[5] * g[0];
+		long f4g0 = (long)this.limbs[4] * g[0];
+		long f4g1 = (long)this.limbs[4] * g[1];
+		long f4g2 = (long)this.limbs[4] * g[2];
+		long f4g3 = (long)this.limbs[4] * g[3];
+		long f4g4 = (long)this.limbs[4] * g[4];
+		long f4g5 = (long)this.limbs[4] * g[5];
+		long f4g6_19 = (long)this.limbs[4] * g6_19;
+		long f4g7_19 = (long)this.limbs[4] * g7_19;
+		long f4g8_19 = (long)this.limbs[4] * g8_19;
+		long f4g9_19 = (long)this.limbs[4] * g9_19;
+		long f5g0 = (long)this.limbs[5] * g[0];
 		long f5g1_2 = (long)f5_2 * g[1];
-		long f5g2 = (long)this.t[5] * g[2];
+		long f5g2 = (long)this.limbs[5] * g[2];
 		long f5g3_2 = (long)f5_2 * g[3];
-		long f5g4 = (long)this.t[5] * g[4];
+		long f5g4 = (long)this.limbs[5] * g[4];
 		long f5g5_38 = (long)f5_2 * g5_19;
-		long f5g6_19 = (long)this.t[5] * g6_19;
+		long f5g6_19 = (long)this.limbs[5] * g6_19;
 		long f5g7_38 = (long)f5_2 * g7_19;
-		long f5g8_19 = (long)this.t[5] * g8_19;
+		long f5g8_19 = (long)this.limbs[5] * g8_19;
 		long f5g9_38 = (long)f5_2 * g9_19;
-		long f6g0 = (long)this.t[6] * g[0];
-		long f6g1 = (long)this.t[6] * g[1];
-		long f6g2 = (long)this.t[6] * g[2];
-		long f6g3 = (long)this.t[6] * g[3];
-		long f6g4_19 = (long)this.t[6] * g4_19;
-		long f6g5_19 = (long)this.t[6] * g5_19;
-		long f6g6_19 = (long)this.t[6] * g6_19;
-		long f6g7_19 = (long)this.t[6] * g7_19;
-		long f6g8_19 = (long)this.t[6] * g8_19;
-		long f6g9_19 = (long)this.t[6] * g9_19;
-		long f7g0 = (long)this.t[7] * g[0];
+		long f6g0 = (long)this.limbs[6] * g[0];
+		long f6g1 = (long)this.limbs[6] * g[1];
+		long f6g2 = (long)this.limbs[6] * g[2];
+		long f6g3 = (long)this.limbs[6] * g[3];
+		long f6g4_19 = (long)this.limbs[6] * g4_19;
+		long f6g5_19 = (long)this.limbs[6] * g5_19;
+		long f6g6_19 = (long)this.limbs[6] * g6_19;
+		long f6g7_19 = (long)this.limbs[6] * g7_19;
+		long f6g8_19 = (long)this.limbs[6] * g8_19;
+		long f6g9_19 = (long)this.limbs[6] * g9_19;
+		long f7g0 = (long)this.limbs[7] * g[0];
 		long f7g1_2 = (long)f7_2 * g[1];
-		long f7g2 = (long)this.t[7] * g[2];
+		long f7g2 = (long)this.limbs[7] * g[2];
 		long f7g3_38 = (long)f7_2 * g3_19;
-		long f7g4_19 = (long)this.t[7] * g4_19;
+		long f7g4_19 = (long)this.limbs[7] * g4_19;
 		long f7g5_38 = (long)f7_2 * g5_19;
-		long f7g6_19 = (long)this.t[7] * g6_19;
+		long f7g6_19 = (long)this.limbs[7] * g6_19;
 		long f7g7_38 = (long)f7_2 * g7_19;
-		long f7g8_19 = (long)this.t[7] * g8_19;
+		long f7g8_19 = (long)this.limbs[7] * g8_19;
 		long f7g9_38 = (long)f7_2 * g9_19;
-		long f8g0 = (long)this.t[8] * g[0];
-		long f8g1 = (long)this.t[8] * g[1];
-		long f8g2_19 = (long)this.t[8] * g2_19;
-		long f8g3_19 = (long)this.t[8] * g3_19;
-		long f8g4_19 = (long)this.t[8] * g4_19;
-		long f8g5_19 = (long)this.t[8] * g5_19;
-		long f8g6_19 = (long)this.t[8] * g6_19;
-		long f8g7_19 = (long)this.t[8] * g7_19;
-		long f8g8_19 = (long)this.t[8] * g8_19;
-		long f8g9_19 = (long)this.t[8] * g9_19;
-		long f9g0 = (long)this.t[9] * g[0];
+		long f8g0 = (long)this.limbs[8] * g[0];
+		long f8g1 = (long)this.limbs[8] * g[1];
+		long f8g2_19 = (long)this.limbs[8] * g2_19;
+		long f8g3_19 = (long)this.limbs[8] * g3_19;
+		long f8g4_19 = (long)this.limbs[8] * g4_19;
+		long f8g5_19 = (long)this.limbs[8] * g5_19;
+		long f8g6_19 = (long)this.limbs[8] * g6_19;
+		long f8g7_19 = (long)this.limbs[8] * g7_19;
+		long f8g8_19 = (long)this.limbs[8] * g8_19;
+		long f8g9_19 = (long)this.limbs[8] * g9_19;
+		long f9g0 = (long)this.limbs[9] * g[0];
 		long f9g1_38 = (long)f9_2 * g1_19;
-		long f9g2_19 = (long)this.t[9] * g2_19;
+		long f9g2_19 = (long)this.limbs[9] * g2_19;
 		long f9g3_38 = (long)f9_2 * g3_19;
-		long f9g4_19 = (long)this.t[9] * g4_19;
+		long f9g4_19 = (long)this.limbs[9] * g4_19;
 		long f9g5_38 = (long)f9_2 * g5_19;
-		long f9g6_19 = (long)this.t[9] * g6_19;
+		long f9g6_19 = (long)this.limbs[9] * g6_19;
 		long f9g7_38 = (long)f9_2 * g7_19;
-		long f9g8_19 = (long)this.t[9] * g8_19;
+		long f9g8_19 = (long)this.limbs[9] * g8_19;
 		long f9g9_38 = (long)f9_2 * g9_19;
 		long h0 = f0g0 + f1g9_38 + f2g8_19 + f3g7_38 + f4g6_19 + f5g5_38 + f6g4_19 + f7g3_38 + f8g2_19 + f9g1_38;
 		long h1 = f0g1 + f1g0 + f2g9_19 + f3g8_19 + f4g7_19 + f5g6_19 + f6g5_19 + f7g4_19 + f8g3_19 + f9g2_19;
@@ -934,7 +955,7 @@ final class EdInteger {
 		h9 -= carry9 << 25;
 		carry0 = (h0 += carry9 * 19L) + 0x2000000L >> 26;
 
-		int[] h = mutable ? t : new int[10];
+		int[] h = mutable ? limbs : new int[10];
 		h[0] = (int) (h0 - (carry0 << 26));
 		h[1] = (int) (h1 + carry0);
 		h[2] = (int) h2;
@@ -947,63 +968,17 @@ final class EdInteger {
 		h[9] = (int) h9;
 		return mutable ? this : new EdInteger(h);
 	}
-
-	public EdInteger invert() {
-		EdPoint.TmpNum tt = NUMS.get();
-
-		int i;
-		EdInteger t0 = tt.a.set(this).square();
-		EdInteger t1 = tt.b.set(t0).square().square();
-		t1 = tt.c.set(this).mul(t1);
-
-		t0.mul(t1);
-
-		EdInteger t2 = tt.b.set(t0).square();
-
-		t1.mul(t2);
-		t2.set(t1);
-		for (i = 0; i < 5; ++i) t2.square();
-
-		t1 = t2.mul(t1);
-		t2 = tt.c.set(t1);
-		for (i = 0; i < 10; ++i) t2.square();
-
-		t2.mul(t1);
-		EdInteger t3 = tt.d.set(t2);
-		for (i = 0; i < 20; ++i) t3 = t3.square();
-
-		t2 = t3.mul(t2);
-		for (i = 0; i < 10; ++i) t2.square();
-
-		t1 = t2.mul(t1);
-		t2 = tt.c.set(t1);
-		for (i = 0; i < 50; ++i) t2.square();
-
-		t2 = t2.mul(t1);
-		t3 = tt.b.set(t2);
-		for (i = 0; i < 100; ++i) t3.square();
-
-		t2 = t3.mul(t2);
-		for (i = 0; i < 50; ++i) t2.square();
-
-		t1 = t2.mul(t1);
-		for (i = 0; i < 5; ++i) t1.square();
-
-		EdInteger v = t1.mul(t0);
-		return mutable ? set(v) : v;
-	}
-
 	public EdInteger square() {
-		int f0 = this.t[0];
-		int f1 = this.t[1];
-		int f2 = this.t[2];
-		int f3 = this.t[3];
-		int f4 = this.t[4];
-		int f5 = this.t[5];
-		int f6 = this.t[6];
-		int f7 = this.t[7];
-		int f8 = this.t[8];
-		int f9 = this.t[9];
+		int f0 = this.limbs[0];
+		int f1 = this.limbs[1];
+		int f2 = this.limbs[2];
+		int f3 = this.limbs[3];
+		int f4 = this.limbs[4];
+		int f5 = this.limbs[5];
+		int f6 = this.limbs[6];
+		int f7 = this.limbs[7];
+		int f8 = this.limbs[8];
+		int f9 = this.limbs[9];
 		int f0_2 = 2 * f0;
 		int f1_2 = 2 * f1;
 		int f2_2 = 2 * f2;
@@ -1102,7 +1077,7 @@ final class EdInteger {
 		long carry9 = (h9 += carry8) + 0x1000000L >> 25;
 		carry0 = (h0 += carry9 * 19L) + 0x2000000L >> 26;
 
-		int[] h = mutable ? t : new int[10];
+		int[] h = mutable ? limbs : new int[10];
 		h[0] = (int) (h0 - (carry0 << 26));
 		h[1] = (int) (h1 + carry0);
 		h[2] = (int) h2;
@@ -1116,16 +1091,16 @@ final class EdInteger {
 		return mutable ? this : new EdInteger(h);
 	}
 	public EdInteger squareAndDouble() {
-		int f0 = this.t[0];
-		int f1 = this.t[1];
-		int f2 = this.t[2];
-		int f3 = this.t[3];
-		int f4 = this.t[4];
-		int f5 = this.t[5];
-		int f6 = this.t[6];
-		int f7 = this.t[7];
-		int f8 = this.t[8];
-		int f9 = this.t[9];
+		int f0 = this.limbs[0];
+		int f1 = this.limbs[1];
+		int f2 = this.limbs[2];
+		int f3 = this.limbs[3];
+		int f4 = this.limbs[4];
+		int f5 = this.limbs[5];
+		int f6 = this.limbs[6];
+		int f7 = this.limbs[7];
+		int f8 = this.limbs[8];
+		int f9 = this.limbs[9];
 		int f0_2 = 2 * f0;
 		int f1_2 = 2 * f1;
 		int f2_2 = 2 * f2;
@@ -1234,7 +1209,7 @@ final class EdInteger {
 		long carry9 = (h9 += carry8) + 0x1000000L >> 25;
 		carry0 = (h0 += carry9 * 19L) + 0x2000000L >> 26;
 
-		int[] h = mutable ? t : new int[10];
+		int[] h = mutable ? limbs : new int[10];
 		h[0] = (int) (h0 - (carry0 << 26));
 		h[1] = (int) (h1 + carry0);
 		h[2] = (int) h2;
@@ -1248,63 +1223,87 @@ final class EdInteger {
 		return mutable ? this : new EdInteger(h);
 	}
 
-	public EdInteger pow22523() {
-		EdPoint.TmpNum tt = NUMS.get();
+	public EdInteger invert() {
+		EdPoint.MthCtx mc = MC.get();
 
+		final EdInteger t0 = mc.a.set(this).square();
+		final EdInteger t1 = mc.b.set(t0).square().square().mul(this);
+
+		t0.mul(t1);
+		final EdInteger res = mutable ? set(t0) : t0.mutable();
+		t0.square().mul(t1);
+
+		pow2_250n(t0, t1, mc.c, 5);
+
+		return res.mul(t0);
+	}
+
+	public EdInteger pow2_252m3() {
+		EdPoint.MthCtx mc = MC.get();
+
+		final EdInteger t0 = mc.a.set(this).square();
+		final EdInteger t1 = mc.b.set(t0).square().square().mul(this);
+
+		t0.mul(t1).square().mul(t1);
+
+		pow2_250n(t0, t1, mc.c, 2);
+
+		final EdInteger res = mutable ? this : mutable();
+		return res.mul(t0);
+	}
+
+	/**
+	 * compute in^(2^(250+n) - 1)
+	 */
+	private static void pow2_250n(EdInteger in, EdInteger t1, EdInteger t2, int n) {
 		int i;
-		EdInteger t0 = tt.a.set(this).square();
-		EdInteger t1 = tt.b.set(t0).square().square();
-		t1 = tt.c.set(this).mul(t1);
 
-		t0.mul(t1).square();
-		t0 = t1.mul(t0);
-
-		t1 = tt.a.set(t0);
+		t1.set(in);
 		for (i = 0; i < 5; ++i) t1.square();
+		in.mul(t1); // in = x^{2^10 - 1}
 
-		t0 = t1.mul(t0);
-		t1 = tt.c.set(t0);
+		t1.set(in);
 		for (i = 0; i < 10; ++i) t1.square();
+		t1.mul(in); // t1 = x^{2^20 - 1}
 
-		t1.mul(t0);
-		EdInteger t2 = tt.b.set(t1);
+		t2.set(t1);
 		for (i = 0; i < 20; ++i) t2.square();
+		t1.mul(t2); // t1 = x^{2^40 - 1}
 
-		t1 = t2.mul(t1);
 		for (i = 0; i < 10; ++i) t1.square();
+		in.mul(t1); // in = x^{2^50 - 1}
 
-		t0 = t1.mul(t0);
-		t1 = tt.a.set(t0); // can be a or c
-		for (i = 0; i < 50; ++i) t1 = t1.square();
-
-		t1.mul(t0);
-		t2 = tt.c.set(t1);
-		for (i = 0; i < 100; ++i) t2.square();
-
-		t1 = t2.mul(t1);
+		t1.set(in);
 		for (i = 0; i < 50; ++i) t1.square();
+		t1.mul(in); // t1 = x^{2^100 - 1}
 
-		t1.mul(t0).square().square();
-		return mul(t1);
+		t2.set(t1);
+		for (i = 0; i < 100; ++i) t2.square();
+		t1.mul(t2); // t1 = x^{2^200 - 1}
+
+		for (i = 0; i < 50; ++i) t1.square();
+		in.mul(t1); // in = x^{2^250 - 1}
+
+		for (i = 0; i < n; ++i) in.square();
 	}
 
 	public EdInteger cmov(EdInteger val, int b) {
 		b = -b;
-		int[] h = mutable ? t : new int[10];
+		int[] h = mutable ? limbs : new int[10];
 		for (int i = 0; i < 10; i++) {
-			int x = t[i];
-			h[i] = x ^ ((x ^ val.t[i]) & b);
+			int x = limbs[i];
+			h[i] = x ^ ((x ^ val.limbs[i]) & b);
 		}
 		return mutable ? this : new EdInteger(h);
 	}
 
 	public EdInteger set(EdInteger o) {
 		if (!mutable) throw new AssertionError();
-		System.arraycopy(o.t, 0, t, 0, 10);
+		System.arraycopy(o.limbs, 0, limbs, 0, 10);
 		return this;
 	}
 	public EdInteger mutable() {
-		EdInteger integer = new EdInteger(t.clone());
+		EdInteger integer = new EdInteger(limbs.clone());
 		integer.mutable = true;
 		return integer;
 	}
@@ -1313,14 +1312,24 @@ final class EdInteger {
 		return this;
 	}
 
-	public int hashCode() { return Arrays.hashCode(t); }
+	public int hashCode() { return Arrays.hashCode(limbs); }
 
 	public boolean equals(Object obj) {
 		if (!(obj instanceof EdInteger)) return false;
-		return Arrays.equals(((EdInteger) obj).t, t);
+		return Arrays.equals(((EdInteger) obj).limbs, limbs);
 	}
 
 	public String toString() {
-		return "[EdElement="+TextUtil.bytes2hex(toByteArray())+"]";
+		// LE to BE
+		byte[] byteArray = toByteArray();
+		int offset = 0;
+		int count = byteArray.length-1;
+		for (int mid = Math.max((count + 1) >> 1, 1); offset < mid; offset++) {
+			var prev = byteArray[offset];
+			byteArray[offset] = byteArray[count - offset];
+			byteArray[count - offset] = prev;
+		}
+
+		return "[EdElement="+TextUtil.bytes2hex(byteArray)+"]";
 	}
 }

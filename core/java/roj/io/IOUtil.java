@@ -80,7 +80,8 @@ public final class IOUtil {
 	}
 
 	public static String encodeHex(byte[] bytes) {return TextUtil.bytes2hex(bytes, getSharedCharBuf()).toString();}
-	public static byte[] decodeHex(CharSequence str) {return TextUtil.hex2bytes(str, getSharedByteBuf()).toByteArray();}
+	@Deprecated
+	public static byte[] decodeHex(CharSequence str) {return TextUtil.hex2bytes(str);}
 
 	public static void writeSingleByteHelper(OutputStream out, int b) throws IOException {
 		byte[] b1 = SharedBuf.get().singleByteBuffer;

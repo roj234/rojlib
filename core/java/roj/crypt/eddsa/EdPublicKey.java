@@ -1,6 +1,7 @@
 package roj.crypt.eddsa;
 
 import roj.crypt.asn1.DerValue;
+import roj.text.TextUtil;
 
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
@@ -10,14 +11,14 @@ import java.util.Arrays;
 import static roj.crypt.eddsa.EdPrivateKey.OID_ED25519;
 import static roj.crypt.eddsa.EdPrivateKey.OID_OLD;
 
-public final class EdPublicKey implements EdKey, PublicKey {
+final class EdPublicKey implements EdKey, PublicKey {
 	private static final int OID_BYTE = 8;
 	private static final int IDLEN_BYTE = 3;
 
 	private final EdParameterSpec spec;
 
 	// Point A
-	private final EdPoint negativePublicPoint;
+	private final EdPoint publicPoint, negativePublicPoint;
 	private final byte[] publicKey;
 
 	public EdPublicKey(X509EncodedKeySpec spec) throws InvalidKeySpecException {
@@ -25,6 +26,7 @@ public final class EdPublicKey implements EdKey, PublicKey {
 	}
 
 	public EdPublicKey(EdPrivateKey privateKey) {
+		this.publicPoint = privateKey.getPublicPoint();
 		this.negativePublicPoint = privateKey.getPublicPoint().negate();
 		this.publicKey = privateKey.getPublicKey();
 		this.spec = privateKey.getParams();
@@ -32,7 +34,8 @@ public final class EdPublicKey implements EdKey, PublicKey {
 
 	public EdPublicKey(byte[] publicPoint, EdParameterSpec spec) {
 		if (publicPoint.length != 32) throw new IllegalArgumentException("public point length is wrong");
-		this.negativePublicPoint = new EdPoint(spec.getCurve(), publicPoint).negate();
+		this.publicPoint = new EdPoint(spec.getCurve(), publicPoint);
+		this.negativePublicPoint = this.publicPoint.negate();
 		this.publicKey = publicPoint;
 		this.spec = spec;
 	}
@@ -77,7 +80,8 @@ public final class EdPublicKey implements EdKey, PublicKey {
 
 	@Override public EdParameterSpec getParams() { return spec; }
 
-	public EdPoint getNegativePublicPoint() { return negativePublicPoint; }
+	public EdPoint getPublicPoint() {return publicPoint;}
+	public EdPoint getNegativePublicPoint() {return negativePublicPoint;}
 	public byte[] getPublicKey() {return publicKey;}
 
 	@Override public String getAlgorithm() {return "EdDSA";}
@@ -107,5 +111,10 @@ public final class EdPublicKey implements EdKey, PublicKey {
 		if (o == this) return true;
 		if (!(o instanceof EdPublicKey pk)) return false;
 		return Arrays.equals(publicKey, pk.publicKey) && spec.equals(pk.spec);
+	}
+
+	@Override
+	public String toString() {
+		return "algorithm = "+spec+", unparsed keybits = "+TextUtil.dumpBytes(publicKey)+"\n";
 	}
 }

@@ -89,7 +89,7 @@ final class MSSEngineClient extends MSSEngine {
 
 		var ke = keyExch==null ? keyExch = config.getKeyExchange(-1) : keyExch;
 		ke.init(random);
-		ke.writePublic(ob.put(CipherSuite.getKeyExchangeId(ke.getAlgorithm())).putShort(ke.length()));
+		ke.writePublic(ob.put(CipherSuite.getKeyExchangeId(ke)).putShort(ke.length()));
 
 		CharMap<DynByteBuf> ext = new CharMap<>();
 

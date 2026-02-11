@@ -42,6 +42,7 @@ import static roj.asm.Opcodes.*;
  * @since 2022/1/11 17:49
  */
 @Public
+// TODO update to V4
 final class ObjectMapperImpl extends ObjectMapper {
 	private static final ReentrantLock lock = new ReentrantLock();
 	private static final Map<String, TypeAdapter> DEFAULT = new HashMap<>();

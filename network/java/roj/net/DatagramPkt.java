@@ -22,6 +22,7 @@ public final class DatagramPkt {
 	@Deprecated
 	public void setAddress(InetAddress ip, char port) {address = new InetSocketAddress(ip, port);}
 
+	// TODO remove equals & hashCode
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;

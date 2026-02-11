@@ -2,9 +2,10 @@ package roj.net.mss;
 
 import roj.collect.ToIntMap;
 import roj.crypt.CryptoFactory;
-import roj.crypt.DHGroup;
-import roj.crypt.ECGroup;
 import roj.crypt.KeyExchange;
+import roj.crypt.eddsa.X25519DH;
+import roj.net.mss.crypto.DHGroup;
+import roj.net.mss.crypto.ECGroup;
 import roj.util.Helpers;
 
 import java.security.MessageDigest;
@@ -39,9 +40,10 @@ public final class CipherSuite {
 
 	private static final Supplier<KeyExchange>[] KEX_ID2INST = Helpers.cast(new Supplier<?>[32]);
 	private static final ToIntMap<String> KEX_NAME2ID = new ToIntMap<>(32);
-	public static byte getKeyExchangeId(String algorithm) {
+	public static byte getKeyExchangeId(KeyExchange keyExchange) {
+		String algorithm = keyExchange.getAlgorithm();
 		int i = KEX_NAME2ID.getOrDefault(algorithm, -1);
-		if (i < 0) throw new IllegalArgumentException("Unknown key agreement: "+algorithm);
+		if (i < 0) throw new IllegalArgumentException("Unknown key agreement: "+ algorithm);
 		return (byte) i;
 	}
 	public static KeyExchange getKeyExchange(int type) {
@@ -68,10 +70,10 @@ public final class CipherSuite {
 
 	static {
 		MSSCipherFactory
-			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, CryptoFactory::AES_GCM),
-			CIPHER_AES_256_GCM = new SimpleCipherFactory(32, CryptoFactory::AES_GCM),
-			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, CryptoFactory::ChaCha_Poly1305),
-			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, CryptoFactory::XChaCha_Poly1305);
+			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, "AES/GCM/NoPadding"),
+			CIPHER_AES_256_GCM = new SimpleCipherFactory(32,"AES/GCM/NoPadding"),
+			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, "ChaCha20-Poly1305"),
+			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, "XChaCha20-Poly1305");
 
 		Supplier<MessageDigest> SIGN_SHA256 = _HASH("SHA-256"), SIGN_SHA384 = _HASH("SHA-384");
 		try {
@@ -80,9 +82,9 @@ public final class CipherSuite {
 			register(PUB_X509_CERTIFICATE, new X509CertFormat());
 			register(PUB_X509_EdDSA, new X509KeyFormat("EdDSA", "EdDSA"));
 
-			register(KEX_DHE_ffdhe2048, "DH-ffdhe2048", DHGroup.ffdhe2048);
-			register(KEX_ECDHE_secp384r1, "ECDH-secp384r1", ECGroup.secp384r1);
-			//register(KEX_XDHE_x25519, "XDH-x25519", X25519DH::new);
+			register(KEX_DHE_ffdhe2048, "DH-ffdhe3072", DHGroup.ffdhe3072);
+			register(KEX_ECDHE_secp384r1, "ECDH-secp256r1", ECGroup.secp256r1);
+			register(KEX_XDHE_x25519, "XDH-x25519", X25519DH::new);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}

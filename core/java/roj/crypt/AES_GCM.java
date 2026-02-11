@@ -95,7 +95,7 @@ final class AES_GCM extends AES {
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (state != 3) {
 			if (state != 2) cryptBegin();
-			else {
+			else if (partAad.isReadable()) {
 				paddedHash(partAad);
 				partAad.clear();
 			}
@@ -240,7 +240,7 @@ final class AES_GCM extends AES {
 
 		ByteList t = getHash();
 		len = tagLen;
-		while (len-- > 0) out.put((t.readByte() ^ ctr.readByte()));
+		while (len-- > 0) out.put(t.readByte() ^ ctr.readByte());
 	}
 	private void decryptFinal(DynByteBuf in, DynByteBuf out) throws AEADBadTagException {
 		ByteList ctr = counter; ctr.clear();

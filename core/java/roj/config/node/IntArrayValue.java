@@ -29,7 +29,7 @@ public class IntArrayValue extends ListValue {
 
 	public int[] value;
 
-	public IntArrayValue(int[] value) {
+	public IntArrayValue(int... value) {
 		super(null);
 		elements = new Ints();
 		this.value = value;

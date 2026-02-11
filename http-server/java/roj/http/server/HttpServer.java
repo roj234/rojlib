@@ -172,7 +172,7 @@ public final class HttpServer implements BiConsumer<String, String> {
 		int sup = isTypeSupported(k);
 		if (sup >= 0) {
 			float Q = 1;
-			if (!v.isEmpty()) {
+			if (v != null && !v.isEmpty()) {
 				try {
 					Q = Float.parseFloat(v);
 				} catch (NumberFormatException e) {

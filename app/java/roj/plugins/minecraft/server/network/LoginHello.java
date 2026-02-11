@@ -2,9 +2,9 @@ package roj.plugins.minecraft.server.network;
 
 import roj.collect.IntMap;
 import roj.concurrent.Promise;
-import roj.crypt.CryptoFactory;
 import roj.crypt.FeedbackCipher;
 import roj.crypt.IvParameterSpecNC;
+import roj.crypt.RCipher;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -150,7 +150,7 @@ public class LoginHello implements ChannelHandler {
 
 	static void insertCipher(MyChannel channel, byte[] aesKey) throws IOException {
 		try {
-			var aes = CryptoFactory.AES();
+			var aes = RCipher.getInstance("AES/ECB/NoPadding");
 			aes.init(true, aesKey); // avoid extra compute
 
 			var encrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);

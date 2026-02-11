@@ -1,5 +1,6 @@
 package roj.crypt.eddsa;
 
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -51,7 +52,6 @@ public final class EdSignature extends Signature implements Cloneable {
 		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
-		new Throwable().printStackTrace();
 		byte[] a = key.getPrivateKey();
 		// h,a,r均只使用了低32字节
 		byte[] S = EdInteger.scalar_mul_add_mod_inline(h, a, r);
@@ -62,8 +62,33 @@ public final class EdSignature extends Signature implements Cloneable {
 		return out;
 	}
 
+	private static final byte[] L_Order_LE = TextUtil.hex2bytes("edd3f55c1a631258d69cf7a2def9de1400000000000000000000000000000010");
+	private static int isLessThan(byte[] A, byte[] B) {
+		int res = 0;
+		int done = 0;
+
+		// MSB to LSB
+		for (int i = 31; i >= 0; i--) {
+			int a = A[i] & 0xff;
+			int b = B[i] & 0xff;
+
+			int lesser = (a - b) >>> 31;
+			int greater = (b - a) >>> 31;
+
+			res |= lesser & ~done;
+			done |= (lesser | greater);
+		}
+
+		return res;
+	}
+
 	private boolean doVerify(byte[] signature) throws SignatureException {
 		if (signature.length != 64) throw new SignatureException("signature length is wrong");
+
+		byte[] S = Arrays.copyOfRange(signature, 32, 64);
+		// S must less than L
+		int lessThan = isLessThan(S, L_Order_LE);
+		if (lessThan == 0) return false;
 
 		EdPublicKey key = (EdPublicKey) this.key;
 
@@ -74,13 +99,14 @@ public final class EdSignature extends Signature implements Cloneable {
 		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
-		byte[] S = Arrays.copyOfRange(signature, 32, 64);
 		EdPoint R = key.getParams().getBasePoint().doubleScalarMultiplyShared(key.getNegativePublicPoint(), h, S);
 		byte[] Rbyte = R.toByteArray();
+
+		int check = 0;
 		for (int i = 0; i < Rbyte.length; ++i) {
-			if (Rbyte[i] != signature[i]) return false;
+			check |= Rbyte[i] ^ signature[i];
 		}
-		return true;
+		return check == 0;
 	}
 	// 三个核心函数
 
@@ -112,6 +138,9 @@ public final class EdSignature extends Signature implements Cloneable {
 			throw new InvalidKeyException("cannot identify EdDSA public key: " + publicKey.getClass());
 
 		key = (EdPublicKey) publicKey;
+		if (key.getParams().getType() != EdParameterSpec.Type.EdDSA) {
+			throw new InvalidKeyException("Unsupported key type: "+key.getParams().getType());
+		}
 		init();
 	}
 
@@ -122,6 +151,9 @@ public final class EdSignature extends Signature implements Cloneable {
 		}
 
 		key = (EdPrivateKey) privateKey;
+		if (key.getParams().getType() != EdParameterSpec.Type.EdDSA) {
+			throw new InvalidKeyException("Unsupported key type: "+key.getParams().getType());
+		}
 		init();
 	}
 

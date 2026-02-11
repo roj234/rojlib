@@ -45,6 +45,8 @@ import java.util.function.BiConsumer;
 import static roj.archive.WinAttributes.*;
 
 /**
+ * TODO RPC
+ * TODO 实装并行解压
  * @author Roj234
  * @since 2026/01/19 23:39
  */
@@ -138,6 +140,10 @@ public class NewUnarchiver {
 
 		public FileInfo(String segmentName, ArchiveEntry entry) {
 			path = segmentName;
+			if (entry == null) {
+				isDir = true;
+				return;
+			}
 			isDir = entry.isDirectory();
 			size = entry.getSize();
 			lastModified = entry.getModificationTime();
@@ -340,13 +346,16 @@ public class NewUnarchiver {
 		List<String> split = TextUtil.split(options.path, "/");
 
 		TreeBuilder.Node<ArchiveEntry> node = directoryNode;
+		find:
 		for (int i = 0; i < split.size(); i++) {
 			for (TreeBuilder.Node<ArchiveEntry> child : node.children) {
 				if (child.name.equals(split.get(i))) {
 					node = child;
-					break;
+					continue find;
 				}
 			}
+
+			System.out.println("未找到子目录 "+options.path);
 		}
 
 		ListPathResult result = new ListPathResult();

@@ -1154,7 +1154,7 @@ public final class ExprParser {
 		node.wordStart = wordStart;
 		return node;
 	}
-	private Expr lambda(LavaTokenizer wr, List<VariableDeclare> argNameAndTypes, int stopWord) throws ParseException {
+	public Expr lambda(LavaTokenizer wr, List<VariableDeclare> argNameAndTypes, int stopWord) throws ParseException {
 		var immutableArgTypes = copyOf(argNameAndTypes);
 		var argNames = Flow.of(immutableArgTypes).map(def -> def.name).toList();
 
@@ -1192,7 +1192,7 @@ public final class ExprParser {
 				ctx.tokenizer.setText(methodStr, 0);
 				ctx.tokenizer.init(offset, linePos, lineIdx);
 
-				var cw = ctx.bp.parseMethod(ctx.file, method, argNames);
+				var cw = ctx.bp.parseMethod(ctx.file, method, argNames, MethodParser.MT_EXPRESSION_LAMBDA);
 				cw.finish();
 				method.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
 			};

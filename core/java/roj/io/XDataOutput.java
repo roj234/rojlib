@@ -42,11 +42,11 @@ public interface XDataOutput extends DataOutput, Closeable {
 	static int zig(int i) {return (i << 1) ^ (i >> 31);}
 	static long zig(long i) {return (i << 1) ^ (i >> 63);}
 
-	XDataOutput putVarInt(int x) throws IOException;
-	XDataOutput putVarLong(long x) throws IOException;
+	XDataOutput putVarInt(int n) throws IOException;
+	XDataOutput putVarLong(long n) throws IOException;
 
-	XDataOutput putVUInt(int x) throws IOException;
-	XDataOutput putVULong(long x) throws IOException;
+	XDataOutput putVUInt(int n) throws IOException;
+	XDataOutput putVULong(long n) throws IOException;
 
 	// UTF-16BE
 	XDataOutput putChars(CharSequence s) throws IOException;

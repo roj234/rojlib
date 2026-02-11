@@ -1,5 +1,6 @@
 package roj.plugins.dns;
 
+import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
@@ -13,10 +14,8 @@ import roj.http.server.auto.POST;
 import roj.io.IOUtil;
 import roj.net.Net;
 import roj.plugin.Plugin;
-import roj.plugins.dns.DnsServer.Record;
 import roj.text.*;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -25,16 +24,15 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URL;
-import java.util.List;
 
-import static roj.plugins.dns.DnsServer.*;
+import static roj.plugins.dns.DnsQuestion.*;
 
 /**
  * @author solo6975
  * @since 2022/1/1 19:20
  */
 public class ADnsGuard extends Plugin {
-	private DnsServer dns;
+	private DnsServer server;
 
 	@Override
 	protected void onEnable() throws Exception {
@@ -44,6 +42,7 @@ public class ADnsGuard extends Plugin {
 		System.out.println("Dns listening on "+local);
 
 		var dns = new DnsServer(cfg, local);
+		this.server = dns;
 
 		ListValue list = cfg.getOrCreateList("hosts");
 		for (int i = 0; i < list.size(); i++) {
@@ -102,7 +101,7 @@ public class ADnsGuard extends Plugin {
 		}
 
 		if (cfg.getBool("manage")) registerRoute("dns/", new OKRouter().register(dns));
-		Record.ttlUpdateMultiplier = cfg.getFloat("TTLFactor", 1);
+		//Record.ttlUpdateMultiplier = cfg.getFloat("TTLFactor", 1);
 
 		System.out.println("Welcome, to a cleaner world, "+System.getProperty("user.name", "user")+"!");
 		dns.launch();
@@ -133,7 +132,7 @@ public class ADnsGuard extends Plugin {
 	}
 
 	@GET
-	public String stat() {return DebugTool.inspect(resolved.entrySet());}
+	public String stat() {return DebugTool.inspect(server.answerCache.entrySet());}
 
 	@POST
 	public void set(Request req, Response rh, String url, String type, String cnt) {
@@ -141,36 +140,32 @@ public class ADnsGuard extends Plugin {
 		if (url == null || type == null || cnt == null) {
 			msg = "缺field";
 		} else {
-			RecordKey key = new RecordKey();
-			key.url = url;
+			DnsResourceKey key = new DnsResourceKey(url);
 
 			if (type.equals("-1")) {
-				msg = (resolved.remove(key) == null) ? "不存在" : "已清除";
+				msg = (server.answerCache.remove(key) == null) ? "不存在" : "已清除";
 			} else {
-				Record e = new Record();
-				e.TTL = Integer.MAX_VALUE;
 				short qType = (short) FastNumberParser.parseInt(type);
-				e.qType = qType;
+				byte[] data = null;
 				if (qType == Q_A || qType == Q_AAAA) {
-					e.data = Net.ip2bytes(cnt);
+					data = Net.ip2bytes(cnt);
 				} else {
 					switch (qType) {
 						case Q_CNAME, Q_MB, Q_MD, Q_MF, Q_MG, Q_MR, Q_NS, Q_PTR:
 							DynByteBuf w = IOUtil.getSharedByteBuf();
-							writeDomain(w, cnt);
-							e.data = w.toByteArray();
+							encodeDomain(w, cnt);
+							data = w.toByteArray();
 							break;
 						default:
-							msg = "暂不支持" + Record.QTypeToString(qType);
+							msg = "暂不支持" + DnsAnswer.getTypeName(qType);
 					}
 				}
+				var e = new DnsAnswer(qType, C_INTERNET, data);
 
 				if (msg == null) {
-					List<Record> records = resolved.computeIfAbsent(key, Helpers.fnArrayList());
-					key.lock.writeLock().lock();
-					records.clear();
-					records.add(e);
-					key.lock.writeLock().unlock();
+					ArrayList<DnsAnswer> value = new ArrayList<>();
+					value.add(e);
+					server.answerCache.put(key, value);
 					msg = "操作完成";
 				}
 			}

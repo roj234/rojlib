@@ -21,7 +21,30 @@ public final class CertInfo {
 	public String signatureAlgorithm = "SHA256";
 	public long notBefore = System.currentTimeMillis();
 	public long notAfter = notBefore + 3650 * 86400000L;
-	public List<Extension> extensions = new ArrayList<>();
+	public List<CertExtension> extensions = new ArrayList<>();
+
+	public CertInfo(Certificate certificate, PrivateKey privateKey) {
+		X509Certificate cer = (X509Certificate) certificate;
+
+		key = new KeyPair(certificate.getPublicKey(), privateKey);
+		serialNumber = cer.getSerialNumber();
+		signatureAlgorithm = cer.getSigAlgName();
+		notBefore = cer.getNotBefore().getTime();
+		notAfter = cer.getNotAfter().getTime();
+
+		X500Principal subjectX500Principal = cer.getSubjectX500Principal();
+		System.out.println(subjectX500Principal);
+		String name = subjectX500Principal.getName();
+		if (!name.isEmpty()) DN.put(KnownOID.CommonName, name);
+		//int basicConstraints = cer.getBasicConstraints();
+		//boolean[] keyUsage = cer.getKeyUsage();
+
+		KnownOID subjectKeyID = KnownOID.SubjectKeyID;
+		byte[] extensionValue = cer.getExtensionValue(subjectKeyID.oid.toString());
+		if (extensionValue != null) {
+			extensions.add(new CertExtension(subjectKeyID, false, extensionValue));
+		}
+	}
 
 	// 证书里一定要有密钥，不是么
 	public CertInfo(KeyPair key) {this.key = key;}
@@ -39,10 +62,10 @@ public final class CertInfo {
 		extensions.add(CertExtension.extendedKeyUsage(KnownOID.codeSigning));
 	}
 
-	public void setupHttps(String... domains) {
+	public void setupTLS(String... domains) {
 		extensions.add(CertExtension.basicConstraints(false, 1));
 		extensions.add(CertExtension.keyUsage(CertExtension.digitalSignature));
 		extensions.add(CertExtension.extendedKeyUsage(KnownOID.serverAuth, KnownOID.clientAuth));
-		extensions.add(CertExtension.dnsName(domains));
+		if (domains.length > 0) extensions.add(CertExtension.dnsName(domains));
 	}
 }

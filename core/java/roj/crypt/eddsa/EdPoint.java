@@ -12,9 +12,9 @@ final class EdPoint implements Serializable {
 		static final byte P2 = 0, P3 = 1, P1P1 = 2, PRECOMP = 3, CACHED = 4;
 	}
 
-	static final ThreadLocal<TmpNum> NUMS = ThreadLocal.withInitial(TmpNum::new);
-	static final class TmpNum {
-		final EdInteger a = ZERO.mutable(), b = ZERO.mutable(), c = ZERO.mutable(), d = ZERO.mutable(), invert_safe = ZERO.mutable();
+	static final ThreadLocal<MthCtx> MC = ThreadLocal.withInitial(MthCtx::new);
+	static final class MthCtx {
+		final EdInteger a = ZERO.mutable(), b = ZERO.mutable(), c = ZERO.mutable(), invsafe1 = ZERO.mutable(), invsafe2 = ZERO.mutable();
 		final EdPoint pa = new EdPoint(), pb = pa.mutable(), pc = pa.mutable();
 
 		final byte[] ba = new byte[256], bb = new byte[256];
@@ -54,7 +54,7 @@ final class EdPoint implements Serializable {
 		EdInteger v = yy.mutable().mul(curve.D).add1();
 		EdInteger v3 = v.mutable().square().mul(v);
 		EdInteger x = v3.mutable().square().mul(v).mul(u);
-		x = x.pow22523();
+		x = x.pow2_252m3();
 		x = v3.mul(u).mul(x);
 		EdInteger vxx = x.mutable().square().mul(v);
 		EdInteger check = vxx.mutable().sub(u);
@@ -88,35 +88,45 @@ final class EdPoint implements Serializable {
 	}
 
 	public byte[] toByteArray() {
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 		switch (format) {
 			case Format.P2: case Format.P3: {
-				EdInteger recip = tt.invert_safe.set(Z).invert();
-				EdInteger x = tt.b.set(X).mul(recip);
-				boolean flagneg = x.isNegative();
+				var recip = mc.invsafe1.set(Z).invert();
+				var tmp = mc.a;
 
-				byte[] s = x.set(Y).mul(recip).toByteArray();
-				if (flagneg) s[31] |= 0x80;
+				byte[] s = tmp.set(Y).mul(recip).toByteArray();
+				if (tmp.set(X).mul(recip).isNegative())
+					s[31] |= 0x80;
 				return s;
 			}
 		}
 
-		return tt.pa.set(this).toP2().toByteArray();
+		return mc.pa.set(this).toP2().toByteArray();
 	}
 
-	public byte[] getU() {
-		TmpNum tt = NUMS.get();
+	/**
+	 * 获取蒙哥马利坐标系下的点 u, 用于 X25519DH 计算共享密钥
+	 * y' = Y / Z
+	 * u = (1 + y') / (1 - y')
+	 * @return Montgomery point u (in byteArray)
+	 */
+	public EdInteger getU() {
+		MthCtx mc = MC.get();
 		switch (format) {
 			case Format.P2: case Format.P3: {
+				var recip = mc.invsafe1.set(Z).invert();
+				// 将投影坐标转换为仿射坐标 (y = Y / Z)
+				var y = mc.invsafe2.set(Y).mul(recip);
+
 				// 计算 u = (1 + y) / (1 - y)
-				EdInteger num = EdInteger.ONE.add(Y);
-				EdInteger den = EdInteger.ONE.sub(Y);
-				EdInteger u = num.mul(den.invert());
-				return u.toByteArray();
+				var den = mc.invsafe1.set(EdInteger.ONE).sub(y).invert();
+				var num = mc.a.set(EdInteger.ONE).add(y);
+
+				return num.mul(den);
 			}
 		}
 
-		return tt.pa.set(this).toP2().toByteArray();
+		return mc.pa.set(this).toP2().getU();
 	}
 
 	public EdPoint toP2() { return toRep(Format.P2); }
@@ -131,7 +141,7 @@ final class EdPoint implements Serializable {
 					case Format.P2:
 						if (mutable) {
 							format = Format.P2;
-							NUMS.get().reserve(T);
+							MC.get().reserve(T);
 							T = null;
 							return this;
 						}
@@ -139,7 +149,7 @@ final class EdPoint implements Serializable {
 					case Format.CACHED:
 						if (mutable) {
 							format = Format.CACHED;
-							EdInteger x = NUMS.get().a.set(Y).add(X);
+							EdInteger x = MC.get().a.set(Y).add(X);
 							Y.sub(X);
 							X.set(x);
 							T.mul(curve.twoD);
@@ -156,7 +166,7 @@ final class EdPoint implements Serializable {
 							X.mul(T);
 							Y.mul(Z);
 							Z.mul(T);
-							NUMS.get().reserve(T);
+							MC.get().reserve(T);
 							T = null;
 							return this;
 						}
@@ -164,7 +174,7 @@ final class EdPoint implements Serializable {
 					case Format.P3:
 						if (mutable) {
 							format = Format.P3;
-							EdInteger t = NUMS.get().a.set(X).mul(Y);
+							EdInteger t = MC.get().a.set(X).mul(Y);
 							X.mul(T);
 							Y.mul(Z);
 							Z.mul(T);
@@ -182,15 +192,15 @@ final class EdPoint implements Serializable {
 		if (format != Format.P3) throw new IllegalArgumentException();
 		EdPoint[] preval = new EdPoint[32*8];
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdPoint Bi = tt.pa.set(this);
-		EdPoint Bij = tt.pb.set(this);
-		EdPoint cachedBi = tt.pc.set(this);
+		EdPoint Bi = mc.pa.set(this);
+		EdPoint Bij = mc.pb.set(this);
+		EdPoint cachedBi = mc.pc.set(this);
 
-		EdInteger x = tt.a;
-		EdInteger y = tt.b;
-		EdInteger recip = tt.invert_safe;
+		EdInteger x = mc.a;
+		EdInteger y = mc.b;
+		EdInteger recip = mc.invsafe1;
 
 		for (int i = 0; i < 32; i++) {
 			Bij.set(Bi);
@@ -216,14 +226,14 @@ final class EdPoint implements Serializable {
 		if (format != Format.P3) throw new IllegalArgumentException();
 		EdPoint[] preval2 = new EdPoint[8];
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdPoint Bi = tt.pa.set(this);
-		EdPoint tmp = tt.pb.set(this);
+		EdPoint Bi = mc.pa.set(this);
+		EdPoint tmp = mc.pb.set(this);
 
-		EdInteger x = tt.a;
-		EdInteger y = tt.b;
-		EdInteger recip = tt.invert_safe;
+		EdInteger x = mc.a;
+		EdInteger y = mc.b;
+		EdInteger recip = mc.invsafe1;
 
 		for (int i = 0; i < 8; ++i) {
 			recip.set(Bi.Z).invert();
@@ -241,16 +251,16 @@ final class EdPoint implements Serializable {
 	public EdPoint dbl() {
 		switch (format) {
 			case Format.P2: case Format.P3:
-				TmpNum tt = NUMS.get();
+				MthCtx mc = MC.get();
 
-				EdInteger XX = tt.a.set(X).square();
+				EdInteger XX = mc.a.set(X).square();
 				if (mutable) {
 					X.add(Y).square();
 					Y.square();
 					EdInteger Zn;
 					if (T != null) Zn = T.set(Y);
 					else {
-						Zn = tt.tmp1.pop();
+						Zn = mc.tmp1.pop();
 						if (Zn == null) Zn = Y.mutable();
 						else Zn.set(Y);
 					}
@@ -282,15 +292,15 @@ final class EdPoint implements Serializable {
 		if (q.format != Format.PRECOMP) throw new IllegalArgumentException();
 		if (!mutable) throw new IllegalStateException();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdInteger C = tt.a.set(q.Z).mul(T);
+		EdInteger C = mc.a.set(q.Z).mul(T);
 		EdInteger D = Z.add(Z);
 		T.set(D).sub(C);
 		D.add(C);
 
-		EdInteger A = tt.a.set(Y).add(X).mul(q.X);
-		EdInteger B = tt.b.set(Y).sub(X).mul(q.Y);
+		EdInteger A = mc.a.set(Y).add(X).mul(q.X);
+		EdInteger B = mc.b.set(Y).sub(X).mul(q.Y);
 
 		X.set(A).sub(B);
 		Y.set(A).add(B);
@@ -303,15 +313,15 @@ final class EdPoint implements Serializable {
 		if (q.format != Format.PRECOMP) throw new IllegalArgumentException();
 		if (!mutable) throw new IllegalStateException();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdInteger C = tt.a.set(q.Z).mul(T);
+		EdInteger C = mc.a.set(q.Z).mul(T);
 		EdInteger D = Z.add(Z);
 		T.set(D).add(C);
 		D.sub(C);
 
-		EdInteger A = tt.a.set(Y).add(X).mul(q.Y);
-		EdInteger B = tt.b.set(Y).sub(X).mul(q.X);
+		EdInteger A = mc.a.set(Y).add(X).mul(q.Y);
+		EdInteger B = mc.b.set(Y).sub(X).mul(q.X);
 
 		X.set(A).sub(B);
 		Y.set(A).add(B);
@@ -324,16 +334,16 @@ final class EdPoint implements Serializable {
 		if (format != Format.P3) throw new UnsupportedOperationException();
 		if (q.format != Format.CACHED) throw new IllegalArgumentException();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdInteger A = tt.a.set(Y).add(X).mul(q.X);
-		EdInteger B = tt.b.set(Y).sub(X).mul(q.Y);
+		EdInteger A = mc.a.set(Y).add(X).mul(q.X);
+		EdInteger B = mc.b.set(Y).sub(X).mul(q.Y);
 
 		if (mutable) {
 			X.set(A).sub(B);
 			Y.set(A).add(B);
 
-			EdInteger C = tt.a.set(q.T).mul(T);
+			EdInteger C = mc.a.set(q.T).mul(T);
 			EdInteger D = Z.mul(q.Z);
 			D.add(D);
 
@@ -345,9 +355,9 @@ final class EdPoint implements Serializable {
 		}
 
 		A = A.mutable().sub(B);
-		B = tt.a.mutable().add(B);
+		B = mc.a.mutable().add(B);
 
-		EdInteger C = tt.a.set(q.T).mul(T);
+		EdInteger C = mc.a.set(q.T).mul(T);
 		EdInteger D = Z.mutable().mul(q.Z);
 		D.add(D);
 
@@ -357,16 +367,16 @@ final class EdPoint implements Serializable {
 		if (format != Format.P3) throw new UnsupportedOperationException();
 		if (q.format != Format.CACHED) throw new IllegalArgumentException();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdInteger A = tt.a.set(Y).add(X).mul(q.Y);
-		EdInteger B = tt.b.set(Y).sub(X).mul(q.X);
+		EdInteger A = mc.a.set(Y).add(X).mul(q.Y);
+		EdInteger B = mc.b.set(Y).sub(X).mul(q.X);
 
 		if (mutable) {
 			X.set(A).sub(B);
 			Y.set(A).add(B);
 
-			EdInteger C = tt.a.set(q.T).mul(T);
+			EdInteger C = mc.a.set(q.T).mul(T);
 			EdInteger D = Z.mul(q.Z);
 			D.add(D);
 
@@ -378,9 +388,9 @@ final class EdPoint implements Serializable {
 		}
 
 		A = A.mutable().sub(B);
-		B = tt.a.mutable().add(B);
+		B = mc.a.mutable().add(B);
 
-		EdInteger C = tt.a.set(q.T).mul(T);
+		EdInteger C = mc.a.set(q.T).mul(T);
 		EdInteger D = Z.mutable().mul(q.Z);
 		D.add(D);
 
@@ -389,7 +399,7 @@ final class EdPoint implements Serializable {
 
 	public EdPoint negate() {
 		if (format != Format.P3) throw new UnsupportedOperationException();
-		return curve.P3_ZERO.sub(NUMS.get().pa.set(this).toCached()).toP3().lock();
+		return curve.P3_ZERO.sub(MC.get().pa.set(this).toCached()).toP3().lock();
 	}
 
 	private EdPoint select(int pos, int b, EdPoint _t) {
@@ -412,14 +422,14 @@ final class EdPoint implements Serializable {
 			z.cmov(p.Z, is);
 		}
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		tt.a.set(x);
-		tt.b.set(z);
+		mc.a.set(x);
+		mc.b.set(z);
 
 		x.cmov(y, flagneg);
-		y.cmov(tt.a, flagneg);
-		z.cmov(tt.b.neg(), flagneg);
+		y.cmov(mc.a, flagneg);
+		z.cmov(mc.b.neg(), flagneg);
 
 		_t.format = Format.PRECOMP;
 		return _t;
@@ -444,13 +454,13 @@ final class EdPoint implements Serializable {
 	public EdPoint scalarMultiplyShared(byte[] a) {
 		if (singleTab == null) singleTab = computeSingleTable();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		EdPoint t = tt.pa;
-		EdPoint h = tt.pb.set(curve.P3_ZERO);
+		EdPoint t = mc.pa;
+		EdPoint h = mc.pb.set(curve.P3_ZERO);
 
 		int i;
-		byte[] e = tt.ba; // use 64 length
+		byte[] e = mc.ba; // use 64 length
 		toRadix16(a, e);
 		for (i = 1; i < 64; i += 2) {
 			select(i / 2, e[i], t);
@@ -506,17 +516,17 @@ final class EdPoint implements Serializable {
 		if (doubleTab == null) doubleTab = computeDoubleTable();
 		if (A.doubleTab == null) A.doubleTab = A.computeDoubleTable();
 
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
-		byte[] aslide = tt.ba;
-		byte[] bslide = tt.bb;
+		byte[] aslide = mc.ba;
+		byte[] bslide = mc.bb;
 		slide(a, aslide);
 		slide(b, bslide);
 
 		int i;
 		for (i = 255; i >= 0 && aslide[i] == 0 && bslide[i] == 0; --i);
 
-		EdPoint r = tt.pa.set(curve.P2_ZERO);
+		EdPoint r = mc.pa.set(curve.P2_ZERO);
 
 		while (i >= 0) {
 			r.dbl();
@@ -568,19 +578,19 @@ final class EdPoint implements Serializable {
 
 	public boolean isOnCurve() { return isOnCurve(curve); }
 	public boolean isOnCurve(EdCurve curve) {
-		TmpNum tt = NUMS.get();
+		MthCtx mc = MC.get();
 
 		switch (format) {
 			case Format.P2:
 			case Format.P3: {
-				EdInteger recip = tt.invert_safe.set(Z).invert();
-				EdInteger xx = tt.b.set(X).mul(recip).square();
-				EdInteger yy = tt.c.set(Y).mul(recip).square();
-				EdInteger dxxyy = tt.a.set(curve.D).mul(xx).mul(yy);
+				EdInteger recip = mc.invsafe1.set(Z).invert();
+				EdInteger xx = mc.b.set(X).mul(recip).square();
+				EdInteger yy = mc.c.set(Y).mul(recip).square();
+				EdInteger dxxyy = mc.a.set(curve.D).mul(xx).mul(yy);
 				return dxxyy.add1().add(xx).equals(yy);
 			}
 		}
-		return tt.pa.set(this).toP2().isOnCurve(curve);
+		return mc.pa.set(this).toP2().isOnCurve(curve);
 	}
 
 	public int hashCode() { return Arrays.hashCode(toByteArray()); }

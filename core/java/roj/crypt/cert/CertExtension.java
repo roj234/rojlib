@@ -2,6 +2,7 @@ package roj.crypt.cert;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Unmodifiable;
+import roj.config.node.IntArrayValue;
 import roj.crypt.asn1.DerValue;
 import roj.crypt.asn1.DerWriter;
 import roj.crypt.asn1.KnownOID;
@@ -69,18 +70,30 @@ public final class CertExtension implements Extension {
 		return new CertExtension(KnownOID.KeyUsage, true, dw.toByteArray());
 	}
 
-	private final KnownOID OID;
+	private final KnownOID knownOID;
+	private final IntArrayValue OID;
 	private final boolean isCritical;
 	private final byte[] data;
 
-	CertExtension(KnownOID oid, boolean isCritical, byte[] data) {
+	public CertExtension(KnownOID oid, boolean isCritical, byte[] data) {
 		oid.assertType("CertExt");
+		knownOID = oid;
+		OID = knownOID.oid;
+		this.isCritical = isCritical;
+		this.data = data;
+	}
+	public CertExtension(IntArrayValue oid, boolean isCritical, byte[] data) {
+		knownOID = null;
 		OID = oid;
 		this.isCritical = isCritical;
 		this.data = data;
 	}
 
-	@Override public String getId() {return OID.name();}
+
+	public String toString() {return knownOID == null ? getId() : knownOID.name();}
+	@Override public String getId() {return OID.toString();}
+	public IntArrayValue getOID() {return OID;}
+
 	@Override public boolean isCritical() {return isCritical;}
 	@Unmodifiable @Override public byte[] getValue() {return data;}
 	@Override public void encode(OutputStream out) throws IOException {out.write(data);}

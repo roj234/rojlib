@@ -116,7 +116,7 @@ public class MyPassIs extends Plugin {
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
 		this.pass = CryptoFactory.HKDF_expand(mac, IOUtil.encodeUTF8(passStr), 32);
-		this.cipher = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
+		this.cipher = RCipher.getInstance("AES/CTR/NoPadding");
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
 		MapValue data;

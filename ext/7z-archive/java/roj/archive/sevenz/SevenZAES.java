@@ -26,7 +26,7 @@ public final class SevenZAES extends SevenZCodec {
     private final byte cyclePower;
     private final byte[] salt;
     private final byte[] iv = new byte[16];
-    private final RCipher cipher = CryptoFactory.AES();
+    private final RCipher cipher = RCipher.getInstance("AES/ECB/NoPadding");
 
     private static final int CYCLE_POWER_MAX = 24;
 

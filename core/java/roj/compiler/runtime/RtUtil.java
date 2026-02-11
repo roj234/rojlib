@@ -14,6 +14,10 @@ import java.nio.charset.StandardCharsets;
 public class RtUtil {
 	public static final String CLASS_NAME = "roj/compiler/runtime/RtUtil";
 
+	@SuppressWarnings("unchecked")
+	@Contract("_ -> fail")
+	public static <T extends Throwable> void athrow(Throwable e) throws T {throw (T) e;}
+
 	@IndirectReference
 	public static void nullCheck(Object value, String name) {
 		if (value == null)

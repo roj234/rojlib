@@ -13,7 +13,6 @@ import roj.util.Helpers;
 import roj.util.OperationDone;
 import roj.util.optimizer.IntrinsicCandidate;
 
-import javax.crypto.AEADBadTagException;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
@@ -39,7 +38,7 @@ public final class CryptoFactory extends Provider {
 	}
 
 	private CryptoFactory() {
-		super("RojLib", 1.4, "RojLib Security Provider v1.4");
+		super("RojLib", 2.0, "RojLib Security Provider v2.0");
 		setup();
 		instance = this;
 	}
@@ -47,31 +46,47 @@ public final class CryptoFactory extends Provider {
 	private static final SwitchMap CIPHERS = SwitchMap.Builder
 			.builder(20, false)
 			.add("AES", 0)
+			.add("AES/ECB/NoPadding", 0)
 			.add("SM4", 1)
 			.add("ChaCha20", 2)
 			.add("XChaCha20", 3)
-			.add("ChaCha20WithPoly1305", 4)
-			.add("XChaCha20WithPoly1305", 5)
-			.add("AESWithGCM", 6)
+			.add("ChaCha20-Poly1305", 4)
+			.add("XChaCha20-Poly1305", 5)
+			.add("AES/GCM/NoPadding", 6)
 			.build();
-	public static RCipher getCipherInstance(String algorithm) {
-		return switch (CIPHERS.get(algorithm)) {
+	public static RCipher getCipherInstance(String transformation) {
+		return switch (CIPHERS.get(transformation)) {
 			case 0 -> new AES();
 			case 1 -> new SM4();
 			case 2 -> new ChaCha();
 			case 3 -> new XChaCha();
-			case 4 -> new ChaCha_Poly1305();
+			case 4 -> new ChaCha_Poly1305(new ChaCha());
 			case 5 -> new ChaCha_Poly1305(new XChaCha());
 			case 6 -> new AES_GCM();
-			default -> Helpers.athrow2(new NoSuchAlgorithmException("找不到"+algorithm+"算法的RojLib Cipher实现"));
+			default -> {
+				int pos = transformation.indexOf('/');
+				if (pos < 0) Helpers.athrow2(new NoSuchAlgorithmException("找不到"+transformation+"算法的RojLib实现"));
+
+				var cipher = getCipherInstance(transformation.substring(0, pos));
+				try {
+					if (!cipher.isBareBlockCipher()) throw new InvalidAlgorithmParameterException(transformation+"算法不是标准块密码");
+					cipher = new FeedbackCipher(cipher, FeedbackCipher.MODE_ECB);
+					int endIndex = transformation.indexOf('/', pos+1);
+					if (endIndex < 0) Helpers.athrow2(new NoSuchAlgorithmException(transformation+"算法格式错误"));
+
+					cipher.engineSetMode(transformation.substring(pos+1, endIndex));
+					cipher.engineSetPadding(transformation.substring(endIndex+1));
+				} catch (Exception e) {
+					Helpers.athrow(e);
+				}
+
+				yield cipher;
+			}
 		};
 	}
 
 	private void setup() {
-		put("Cipher.ChaCha20", "roj.crypt.ChaCha");
-		put("Cipher.XChaCha20", "roj.crypt.XChaCha");
-		put("Cipher.ChaCha20WithPoly1305", "roj.crypt.ChaCha_Poly1305");
-		put("Cipher.SM4", "roj.crypt.SM4");
+		// Not register Cipher SPI anymore
 
 		put("MessageDigest.Blake3", "roj.crypt.Blake3");
 		put("MessageDigest.SM3", "roj.crypt.SM3");
@@ -82,8 +97,7 @@ public final class CryptoFactory extends Provider {
 			put("KeyPairGenerator.Ed25519", "roj.crypt.eddsa.EdKeyGenerator");
 			put("Signature.EdDSA", "roj.crypt.eddsa.EdSignature");
 			put("Signature.Ed25519", "roj.crypt.eddsa.EdSignature");
-			//put("Signature.XDH", "roj.crypt.eddsa.XDHUnofficial");
-			//put("Signature.X25519", "roj.crypt.eddsa.XDHUnofficial");
+			//put("KeyAgreement.X25519", "roj.crypt.eddsa.X25519DH_ForSPI");
 		}
 	}
 
@@ -106,10 +120,6 @@ public final class CryptoFactory extends Provider {
 		//(MessageDigest) getSharedDigest(algorithm).clone();
 	}
 
-	public static RCipher AES() {return new AES();}
-	public static RCipher AES_GCM() {return new AES_GCM();}
-	public static RCipher ChaCha_Poly1305() {return new ChaCha_Poly1305(new ChaCha());}
-	public static RCipher XChaCha_Poly1305() {return new ChaCha_Poly1305(new XChaCha());}
 	public static RCipher XChaCha(int nrounds) {
 		if ((nrounds&1) != 0) throw new IllegalArgumentException("nrounds must be even");
 		return new XChaCha(nrounds/2);
@@ -140,60 +150,6 @@ public final class CryptoFactory extends Provider {
 	public static Random L64W64X128MixRandom() {return new L64W64X128Mix();}
 	public static Random L64W64X128MixRandom(long seed) {return new L64W64X128Mix(seed);}
 	//end 伪随机数生成器
-
-	//region AES-SIV
-	//加密：
-	//计算 SIV = HMAC(K, P || AD)
-	//用 SIV 作为CTR模式的IV，加密明文 P，生成密文 C。
-	//最终密文为 SIV || C。
-	public static void AES_SIV_Encrypt(byte[] key,
-									   @Nullable DynByteBuf aad,
-									   DynByteBuf plaintext,
-									   DynByteBuf output) throws GeneralSecurityException {
-
-		var mac = new HMAC(MessageDigest.getInstance("SHA-256"));
-		mac.init(key);
-		mac.update(plaintext);
-		if (aad != null) mac.update(aad);
-		mac.update((byte) 0);
-
-		byte[] siv = mac.digestShared();
-		siv = Arrays.copyOf(siv, 16);
-
-		var aes_ctr = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
-		aes_ctr.init(true, key, new IvParameterSpecNC(siv), null);
-		output.put(siv);
-		aes_ctr.cryptFinal(plaintext, output);
-	}
-	//解密：
-	//从密文中提取 SIV 和 C。
-	//用 SIV 作为IV解密 C 得到明文 P'。
-	//计算 SIV' = HMAC(K, P' || AD)，验证 SIV' = SIV。
-	public static void AES_SIV_Decrypt(byte[] key,
-									   @Nullable DynByteBuf aad,
-									   DynByteBuf ciphertext,
-									   DynByteBuf output) throws GeneralSecurityException {
-
-		byte[] siv = ciphertext.readBytes(16);
-		int begin = output.wIndex();
-
-		var aes_ctr = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
-		aes_ctr.init(false, key, new IvParameterSpecNC(siv), null);
-		aes_ctr.cryptFinal(ciphertext, output);
-
-		var mac = new HMAC(getSharedDigest("SHA-256"));
-		mac.init(key);
-		mac.update(output.slice(begin, output.wIndex()-begin));
-		if (aad != null) mac.update(aad);
-		mac.update((byte) 0);
-
-		byte[] siv1 = mac.digestShared();
-		siv1 = Arrays.copyOf(siv1, 16);
-
-		if (!MessageDigest.isEqual(siv, siv1))
-			throw new AEADBadTagException();
-	}
-	//endregion
 	//region 证书验证
 	private static X509TrustManager defaultTrustStore;
 	public static X509TrustManager getDefaultTrustStore() throws NoSuchAlgorithmException {

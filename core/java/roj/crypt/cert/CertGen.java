@@ -62,7 +62,7 @@ public final class CertGen {
 
 		hasSubjectKeyId: {
 			for (var extension : subject.extensions) {
-				if (extension.getId().equals(KnownOID.SubjectKeyID.name())) {
+				if (extension.getOID().equals(KnownOID.SubjectKeyID.oid)) {
 					break hasSubjectKeyId;
 				}
 			}
@@ -76,12 +76,12 @@ public final class CertGen {
 		hasAuthorityKeyId:
 		if (subject != issuer) {
 			for (var extension : subject.extensions) {
-				if (extension.getId().equals(KnownOID.AuthorityKeyID.name())) {
+				if (extension.getOID().equals(KnownOID.AuthorityKeyID.oid)) {
 					break hasAuthorityKeyId;
 				}
 			}
 			for (var extension : issuer.extensions) {
-				if (extension.getId().equals(KnownOID.SubjectKeyID.name())) {
+				if (extension.getOID().equals(KnownOID.SubjectKeyID.oid)) {
 					var dw1 = new DerWriter();
 					dw1.begin(DerValue.SEQUENCE);
 
@@ -103,7 +103,7 @@ public final class CertGen {
 
 		for (var extension : subject.extensions) {
 			dw.begin(DerValue.SEQUENCE);
-			dw.writeOid(KnownOID.valueOf(extension.getId()).oid.value);
+			dw.writeOid(extension.getOID().value);
 			if (extension.isCritical()) dw.writeBool(true);
 			dw.writeBytes(extension.getValue());
 			dw.end();

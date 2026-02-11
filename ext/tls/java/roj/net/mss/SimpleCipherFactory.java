@@ -13,9 +13,9 @@ public class SimpleCipherFactory implements MSSCipherFactory {
 	protected final int keySize, mcFlag;
 	protected final Supplier<RCipher> provider;
 
-	public SimpleCipherFactory(int keySize, Supplier<RCipher> provider) {
+	public SimpleCipherFactory(int keySize, String cipherId) {
 		this.keySize = keySize;
-		this.provider = provider;
+		this.provider = () -> RCipher.getInstance(cipherId);
 		this.mcFlag = 0;
 	}
 

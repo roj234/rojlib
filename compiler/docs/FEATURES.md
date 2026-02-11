@@ -398,7 +398,7 @@ with (System.out) {
 
 ### 24. `defer` 语句 (已实现)
 
-`defer` 语句允许在代码块结束时执行一个或多个表达式，其行为类似于 `try-finally` 块，但提供了更简洁的语法和更robust的错误处理。
+`defer` 语句允许在 `try` 代码块结束时执行一个或多个表达式，其行为类似于 `try-finally` 块，但提供了更简洁的语法和更robust的错误处理。
 
 **特性说明：**
 *   **多表达式执行：** 一个 `try-with-resources` 块中可以包含任意个 `defer` 语句。
@@ -408,15 +408,20 @@ with (System.out) {
 
 **示例：**
 ```java
-// 以下代码执行结果：先打印 "b"，再打印 "a"，最后关闭文件输入流。
+// 以下代码执行结果：先打印 "b"（如果代码成功执行到了那行defer的位置），再打印 "a"，最后关闭文件输入流。
 try (
     var in = new FileInputStream("file.txt");
     defer System.out.println("a");
-    defer System.out.println("b");
 ) {
     // ... 核心业务逻辑 ...
+    defer System.out.println("b");
 }
 ```
+
+注1：try-with-resources 使用了Lava运行时库(DeferList)以减少 code bloat  
+注2：写在try的圆括号部分的defer和写方括号部分的defer其实不是同一个东西，并且前者性能更好（确定会执行）  
+注3：后者基于 invokedynamic，不建议在*真正的*性能关键代码中使用 defer  
+注4：不要在循环里执行 defer，它真的会在退出时执行很多次！
 
 ### 25. 尾递归优化 (Tail Recursion Optimization)
 

@@ -1,6 +1,5 @@
 package roj.archive.algorithms.crypt;
 
-import roj.crypt.CryptoFactory;
 import roj.crypt.RCipher;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -24,7 +23,7 @@ public final class AES_XTS extends RCipher implements SeekableCipher {
 	private final ByteList tweak, cipherIn, cipherOut;
 	private final byte[] steal;
 
-	public AES_XTS() {this(CryptoFactory.AES());}
+	public AES_XTS() {this(getInstance("AES/ECB/NoPadding"));}
 	public AES_XTS(RCipher cipher) {
 		int blockSize = cipher.engineGetBlockSize();
 		if (blockSize == 0) throw new IllegalArgumentException("Not a block cipher");

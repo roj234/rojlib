@@ -35,7 +35,7 @@ public final class RecordAttribute extends Attribute {
 				el.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
 					String name = ((CstUTF) cp.resolve(r)).str();
-					el.attributes._add(new UnparsedAttribute(name, r.slice(r.readInt())));
+					el.attributes._add(Attribute.parse(el, cp, null, name, r.slice(r.readInt()), ATTR_RECORD));
 				}
 			}
 		}

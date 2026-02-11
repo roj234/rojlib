@@ -121,15 +121,16 @@ public class CodeWeaver implements Transformer {
 	 *     </tr>
 	 * <table>
 	 */
-	public static int $$$VALUE_I() {return 0;}
-	public static long $$$VALUE_J() {return 0;}
-	public static double $$$VALUE_D() {return 0;}
-	public static float $$$VALUE_F() {return 0;}
-	public static byte $$$VALUE_B() {return 0;}
-	public static char $$$VALUE_C() {return 0;}
-	public static short $$$VALUE_S() {return 0;}
-	public static boolean $$$VALUE_Z() {return false;}
-	public static void $$$VALUE_V() {}
+	// TODO generic + pattern match
+	public static native int $$$VALUE_I();
+	public static native long $$$VALUE_J();
+	public static native double $$$VALUE_D();
+	public static native float $$$VALUE_F();
+	public static native byte $$$VALUE_B();
+	public static native char $$$VALUE_C();
+	public static native short $$$VALUE_S();
+	public static native boolean $$$VALUE_Z();
+	public static native void $$$VALUE_V();
 	// endregion
 
 	public static final class Patch {

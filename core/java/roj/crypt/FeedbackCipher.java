@@ -98,7 +98,7 @@ public class FeedbackCipher extends RCipher {
 
 	@Override
 	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		decrypt = encrypt == false;
+		decrypt = !encrypt;
 		switch (type) {
 			case MODE_OFB: case MODE_CFB: case MODE_CTR:
 				encrypt = true;
