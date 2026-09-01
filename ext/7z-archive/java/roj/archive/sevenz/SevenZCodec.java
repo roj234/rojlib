@@ -27,7 +27,7 @@ public abstract class SevenZCodec {
 	/**
 	 * 注册一个需要配置的Filter
 	 */
-	public static synchronized void register(byte[] id, Factory factory) { REGISTRY.put(ByteList.wrap(id), factory); }
+	public static synchronized void register(byte[] id, Factory factory) { init(); REGISTRY.put(ByteList.wrap(id), factory); }
 
 	public abstract byte[] id();
 
@@ -52,10 +52,21 @@ public abstract class SevenZCodec {
 	}
 
 	public static Factory create(DynByteBuf id) {
+		init();
+		var coder = REGISTRY.get(id);
+		if (coder == null) {
+			byte[] idBytes = id.toByteArray();
+			return props -> new UnknownCodec(idBytes, props);
+		}
+		return coder;
+	}
+
+	private static void init() {
 		if (REGISTRY.isEmpty()) {
 			synchronized (REGISTRY) {
 				if (REGISTRY.isEmpty()) {
-					register(Copy.INSTANCE);
+					REGISTRY.put(ByteList.wrap(Copy.INSTANCE.id()), options -> Copy.INSTANCE);
+
 					register(LZMA.ID, LZMA::new);
 					register(LZMA2.ID, LZMA2::new);
 
@@ -63,13 +74,6 @@ public abstract class SevenZCodec {
 				}
 			}
 		}
-
-		var coder = REGISTRY.get(id);
-		if (coder == null) {
-			byte[] idBytes = id.toByteArray();
-			return props -> new UnknownCodec(idBytes, props);
-		}
-		return coder;
 	}
 
 	private static void scanExtensions() {

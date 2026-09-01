@@ -503,6 +503,7 @@ public class NewUnarchiver {
 			bar.setProgress(1);
 		} finally {
 			bar.close();
+			rpc.sendData(new Act("done"));
 		}
 	}
 
@@ -513,9 +514,9 @@ public class NewUnarchiver {
 				block:
 				if (entry.isEncrypted() && password == null) {
 					for (String pass : options.passwords) {
-						password = verifyPassword(entry, pass, "UTF_16LE");
+						password = options.skipPassVerify ? TextUtil.hex2bytes(pass) : verifyPassword(entry, pass, "UTF_16LE");
 						if (password != null) {
-							bar.info = "密码是"+pass;
+							bar.info = "密码是 0x"+TextUtil.bytes2hex(password);
 							break block;
 						}
 					}

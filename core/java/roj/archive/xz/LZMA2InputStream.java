@@ -14,22 +14,19 @@ import roj.archive.rangecoder.RangeDecoder;
 import roj.archive.xz.lz.LZDecoder;
 import roj.archive.xz.lzma.LZMADecoder;
 import roj.io.CorruptedInputException;
+import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.io.XDataInputStream;
 import roj.reflect.Unsafe;
-import roj.text.logging.Logger;
 import roj.util.ArrayUtil;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-import static roj.reflect.Unsafe.U;
-
 /**
  * Decompresses a raw LZMA2 stream (no XZ headers).
  */
-public sealed class LZMA2InputStream extends MBInputStream {
+public final class LZMA2InputStream extends MBInputStream {
 	/**
 	 * Smallest valid LZMA2 dictionary size.
 	 * <p>
@@ -41,23 +38,23 @@ public sealed class LZMA2InputStream extends MBInputStream {
 	 * Largest dictionary size supported by this implementation.
 	 * <p>
 	 * The LZMA2 algorithm allows dictionaries up to one byte less than 4 GiB.
-	 * This implementation supports only 16 bytes less than 2 GiB for raw
-	 * LZMA2 streams, and for .xz files the maximum is 1.5 GiB. This
-	 * limitation is due to Java using signed 32-bit integers for array
-	 * indexing. The limitation shouldn't matter much in practice since so
-	 * huge dictionaries are not normally used.
+	 * This implementation supports only 16 bytes less than 2 GiB for raw LZMA2 streams.
+	 * <p>
+	 * Note by Roj234: 这个限制已不存在，因为我使用直接内存，但是真的扩展的话需要把一堆int的比较改成unsigned的
 	 */
 	public static final int DICT_SIZE_MAX = Integer.MAX_VALUE & ~15;
 
 	private static final int COMPRESSED_SIZE_MAX = 1 << 16;
 
+	private static final byte STATE_MASK = 3, ER_ENABLE_MASK = 4, ER_DESYNC_MASK = 8;
+
 	private XDataInputStream in;
 
-	LZDecoder lz;
-	RangeDecoder rc;
-	LZMADecoder lzma;
+	private LZDecoder lz;
+	private RangeDecoder rc;
+	private LZMADecoder lzma;
 
-	int uncompressedSize;
+	private int uncompressedSize;
 	private byte state;
 
 	/**
@@ -122,6 +119,11 @@ public sealed class LZMA2InputStream extends MBInputStream {
 		else state = LZMA2Encoder.DICT_RESET;
 	}
 
+	public void setErrorRecoveryEnabled(boolean enabled) {
+		if (enabled) state |= ER_ENABLE_MASK;
+		else state &= STATE_MASK;
+	}
+
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
 		return read0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
@@ -135,16 +137,19 @@ public sealed class LZMA2InputStream extends MBInputStream {
 		try {
 			while (len > 0) {
 				if (uncompressedSize <= 0) {
-					nextChunk();
-					if (state == -1) return read == 0 ? -1 : read;
+					if ((state = (byte) nextChunk()) == -1)
+						return read == 0 ? -1 : read;
 				}
 
 				int copySizeMax = Math.min(uncompressedSize, len);
 
-				if (state == LZMA2Encoder.STATE_LZMA) {
-					onDecompress();
-					lz.setLimit(copySizeMax);
-					lzma.decode();
+				if ((state&STATE_MASK) == LZMA2Encoder.STATE_LZMA) {
+					if ((state&ER_DESYNC_MASK) != 0) {
+						lz.skip(copySizeMax);
+					} else {
+						lz.setLimit(copySizeMax);
+						lzma.decode();
+					}
 				} else {
 					lz.copyUncompressed(in, copySizeMax);
 				}
@@ -153,77 +158,32 @@ public sealed class LZMA2InputStream extends MBInputStream {
 				if (addr != 0) addr += copiedSize;
 				len -= copiedSize;
 				read += copiedSize;
-				uncompressedSize -= copiedSize;
 
-				if (uncompressedSize == 0) if (!rc.isFinished() || lz.hasPending()) throw new CorruptedInputException("trailing compressed data");
+				int remain = uncompressedSize -= copiedSize;
+				if (remain == 0) {
+					if ((state&STATE_MASK) == LZMA2Encoder.STATE_LZMA) {
+						// 块被完整解码。LZMA2要求此时range coder恰好耗尽、无残留匹配。
+						// 在错误恢复模式下，这也是"解码全程与编码器保持同步"的验证点。
+						if (!rc.isFinished() || lz.hasPending()) throw new CorruptedInputException("trailing compressed data");
+						state &= ~ER_DESYNC_MASK;
+					}
+				}
 			}
 
 			return read;
 		} catch (Throwable e) {
-			return onException(buf, addr, len, e) + read;
-		}
-	}
-
-	void onDecompress() {}
-	int onException(Object buf, long addr, int len, Throwable e) {
-		try {
-			close();
-		} catch (Throwable ignored) {}
-		Helpers.athrow(e);
-		return 0;
-	}
-
-	public static final class ErrorRecovery extends LZMA2InputStream {
-		private static final Logger LOGGER = Logger.getLogger("LZMA2");
-
-		private int lastGoodPos;
-
-		// 如果头坏，考虑搜RangeCoder起始时0x00，若都损坏，无法程序化修复
-		private int zeroedSize;
-		public long brokenSize;
-
-		public ErrorRecovery(InputStream in, int dictSize) {super(in, dictSize);}
-		public ErrorRecovery(InputStream in, int dictSize, byte[] presetDict) {super(in, dictSize, presetDict);}
-
-		@Override
-		public int read0(Object buf, long addr, int len) throws IOException {
-			int zeroed = 0;
-			if (zeroedSize > 0) {
-				zeroed = Math.min(len, zeroedSize);
-				if (addr != 0) U.setMemory(buf, addr, zeroed, (byte) 0);
-				len -= zeroed;
-				zeroedSize -= zeroed;
+			if ((state&ER_ENABLE_MASK) == 0 || !(e instanceof CorruptedInputException)) {
+				IOUtil.closeSilently(this);
+				throw e;
 			}
-			return super.read0(buf, addr, len) + zeroed;
-		}
 
-		@Override
-		void onDecompress() {lastGoodPos = lz.getPos();}
+			int goodSize = lz.flush0(buf, addr);
+			uncompressedSize -= goodSize;
+			rc.reset();
+			state |= ER_DESYNC_MASK;
+			//brokenSize += uncompressedSize;
 
-		@Override
-		int onException(Object buf, long addr, int len, Throwable e) {
-			if (!(e instanceof CorruptedInputException)) Helpers.athrow(e);
-
-			LOGGER.info("Error '{}', discarding {} bytes", e.getMessage(), uncompressedSize);
-
-			int goodSize = lz.errorRecovery(lastGoodPos, uncompressedSize);
-			rc.errorRecovery();
-
-			int badSize = uncompressedSize - goodSize;
-
-			zeroedSize = badSize;
-			brokenSize += badSize;
-
-			// skip this chunk
-			uncompressedSize = 0;
-
-			return goodSize;
-		}
-
-		@Override
-		public void close() throws IOException {
-			super.close();
-			LOGGER.info("Discarded {} bytes to recovery", brokenSize);
+			return goodSize + read;
 		}
 	}
 
@@ -240,32 +200,32 @@ public sealed class LZMA2InputStream extends MBInputStream {
 		return n - remain;
 	}
 
-	@SuppressWarnings("fallthrough")
-	private void nextChunk() throws IOException {
+	private int nextChunk() throws IOException {
+		int state = this.state;
+
 		int control = in.readUnsignedByte();
 		if (control <= 0x7F) {
 			switch (control) {
 				default: throw new CorruptedInputException("invalid control byte");
-				case 0: putArraysToCache(); state = -1; return; // End of data
+				case 0: putArraysToCache(); return -1; // End of data
 				case 1: lz.reset(); break; // uncompressed with dict reset
 				case 2: // uncompressed
-					if (state > LZMA2Encoder.STATE_RESET) throw new CorruptedInputException("excepting dict reset");
+					if ((state&STATE_MASK) > LZMA2Encoder.STATE_RESET) throw new CorruptedInputException("excepting dict reset");
 			}
 
-			state = LZMA2Encoder.STATE_RESET;
 			uncompressedSize = in.readUnsignedShort()+1;
-			return;
+			return state & (~STATE_MASK) | LZMA2Encoder.STATE_RESET;
 		}
 
 		uncompressedSize = ((control & 0x1F) << 16) + in.readUnsignedShort() + 1;
-		int cSize = in.readUnsignedShort()+1;
+		int compressedSize = in.readUnsignedShort()+1;
 
 		switch (control >>> 5) {
 			// LZMA, dict reset
 			case 7: lz.reset(); readProps(); break;
 			// LZMA, prop reset
 			case 6:
-				if (state == LZMA2Encoder.DICT_RESET) throw new CorruptedInputException("excepting dict reset");
+				if ((state&STATE_MASK) == LZMA2Encoder.DICT_RESET) throw new CorruptedInputException("excepting dict reset");
 				readProps();
 			break;
 			// LZMA, state reset
@@ -276,11 +236,16 @@ public sealed class LZMA2InputStream extends MBInputStream {
 			// LZMA
 			case 4:
 				if (lzma == null) throw new CorruptedInputException("unexpected LZMA state");
+				if ((state & ER_DESYNC_MASK) != 0) {
+					in.skipBytes(compressedSize);
+					//brokenSize += uncompressedSize;
+					return state & ~(STATE_MASK) | LZMA2Encoder.STATE_LZMA;
+				}
 			break;
 		}
 
-		state = LZMA2Encoder.STATE_LZMA;
-		rc.manualFill(in, cSize);
+		rc.manualFill(in, compressedSize);
+		return state & ~(STATE_MASK|ER_DESYNC_MASK) | LZMA2Encoder.STATE_LZMA;
 	}
 
 	private void readProps() throws IOException {
@@ -300,7 +265,7 @@ public sealed class LZMA2InputStream extends MBInputStream {
 	}
 
 	public int available() throws IOException {
-		return in == null ? 0 : state == LZMA2Encoder.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
+		return in == null ? 0 : (state&STATE_MASK) == LZMA2Encoder.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
 	}
 
 	private synchronized void putArraysToCache() {

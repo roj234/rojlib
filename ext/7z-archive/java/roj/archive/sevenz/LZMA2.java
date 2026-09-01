@@ -63,12 +63,12 @@ public final class LZMA2 extends SevenZCodec {
         }
         checkMemoryUsage(memoryLimit, LZMA2InputStream.getMemoryUsage(dictSize));
 
-        return switch (decompressionMode) {
-            default -> new LZMA2InputStream(in, dictSize);
-            case PARALLEL_DECOMPRESS -> new LZMA2ParallelDecoder(in, dictSize);
-            case ERROR_RECOVERY -> new LZMA2InputStream.ErrorRecovery(in, dictSize);
-        };
-    }
+		if (decompressionMode == PARALLEL_DECOMPRESS) return new LZMA2ParallelDecoder(in, dictSize);
+
+        var lzma2In = new LZMA2InputStream(in, dictSize);
+        if (decompressionMode == ERROR_RECOVERY) lzma2In.setErrorRecoveryEnabled(true);
+        return lzma2In;
+	}
 
     @Override
     public boolean equals(Object o) {

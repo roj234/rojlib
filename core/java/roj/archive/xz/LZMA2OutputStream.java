@@ -46,6 +46,11 @@ public final class LZMA2OutputStream extends LZMA2Encoder implements Finishable,
 		props = options.getPropByte();
 		lzma.propReset(options.getLc(), options.getLp(), options.getPb());
 	}
+	public final void stateReset() throws IOException {
+		flush();
+		state = STATE_RESET;
+		lzma.reset();
+	}
 	public final void setCompressionDisabled(boolean b) throws IOException {
 		flush();
 		this.compressionDisabled = b;

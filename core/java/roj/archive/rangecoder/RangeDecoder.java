@@ -67,7 +67,7 @@ public sealed class RangeDecoder permits RangeDecoderFromStream {
 		}
 	}
 
-	public void errorRecovery() {
+	public void reset() {
 		pos = len;
 		code = 0;
 	}

@@ -149,17 +149,15 @@ public final class LZDecoder {
 		if (full < pos) full = pos;
 	}
 
-	public int errorRecovery(int lastGoodPos, int chunkSize) {
-		int goodSize = pos - start;
+	public void skip(int n) {
+		int remain = Math.min(n, bufSize - pos);
+		if (remain > 0) U.setMemory(buf + pos, remain, (byte) 0);
 
-		limit = (lastGoodPos + chunkSize) % bufSize;
-		pos = limit;
-		if (full < limit) full = limit;
-		start = limit;
+		pos += remain;
+		if (full < pos) full = pos;
+		limit = pos;
 
 		pendingLen = 0;
-
-		return goodSize;
 	}
 
 	public int flush(byte[] out, int outOff) { return flush0(out, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+outOff); }

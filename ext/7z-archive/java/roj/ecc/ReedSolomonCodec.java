@@ -29,7 +29,7 @@ public final class ReedSolomonCodec {
 			int logFeedback = LOG[fb];
 			int rowOffset = fb * ecBytes;
 			for (int i = 0; i < ecBytes; i++) {
-				this.premult[rowOffset + i] = EXP[LOG[generator[i + 1] & 255] + logFeedback];
+				this.premult[rowOffset + i] = EXP[LOG[generator[i] & 255] + logFeedback];
 			}
 		}
 		this.memorySize = ecBytes * 9 + (ecBytes / 2) + 6;
@@ -169,31 +169,26 @@ public final class ReedSolomonCodec {
 			// X_j = α^{n-1-pos}
 			pErrorLocations = m.alloc(ecBytes);
 
-			int pLambdaA = m.alloc(errorCount + 1);
-			int pLambdaB = m.alloc(errorCount + 1);
-			int pLambda = pLambdaA;
-
+			int pLambda = m.alloc(errorCount + 1);
 			MEM[pLambda] = 1;
 			int lambdaLen = 1;
-
-			int pPolyGen = m.alloc(2);
-			MEM[pPolyGen + 1] = 1;
 
 			// 计算擦除定位多项式 Λ(x) = Π_j (1 + X_j * x)
 			for (int i = 0; i < errorCount; i++) {
 				int p = erasureLocations[i] & 0xFF;
 				if (p >= buf.length) throw new FastFailException("[ECC]Bad erasure pos "+p);
-				byte X_j = EXP[buf.length - 1 - p];
-				MEM[pErrorLocations + i] = X_j;
-				MEM[pPolyGen] = X_j;
+				int pos = buf.length - 1 - p;
+				MEM[pErrorLocations + i] = EXP[pos];
 
-				int pDest = (pLambda == pLambdaA) ? pLambdaB : pLambdaA;
-				polyMul(MEM, pLambda, lambdaLen, pPolyGen, 2, pDest);
+				byte prev = 0;
+				for (int j = 0; j < lambdaLen; j++) {
+					byte v = MEM[pLambda + j];
+					MEM[pLambda + j] = (byte)(EXP[LOG[v & 0xFF] + pos] ^ prev);
+					prev = v;
+				}
+				MEM[pLambda + lambdaLen] = prev;
 				lambdaLen++;
-				pLambda = pDest;
 			}
-
-			m.ptr -= 2;
 
 			// T(x) = S(x) * Λ(x) mod x^ecBytes
 			int pForneySyn = m.alloc(ecBytes);
@@ -372,26 +367,18 @@ public final class ReedSolomonCodec {
 	//endregion
 	//region GFPolynomial
 	private static byte[] polyNewGenerator(int size) {
-		byte[] MEM = new byte[(size + 1) * 2 + 2];
-		int pLambdaA = 2;
-		int pLambdaB = 3 + size;
-		int pLambda = pLambdaA;
+		byte[] poly = new byte[size + 1];
+		poly[0] = 1;
 
-		MEM[pLambda] = 1;
-		int lambdaLen = 1;
-
-		MEM[0] = 1;
-
+		var lambdaLen = 0;
 		for (var i = 0; i < size; i++) {
-			MEM[1] = EXP[i];
-
-			int pDest = (pLambda == pLambdaA) ? pLambdaB : pLambdaA;
-			polyMul(MEM, pLambda, lambdaLen, 0, 2, pDest);
+			for (var j = lambdaLen; j >= 0; j--) {
+				poly[j + 1] ^= EXP[LOG[poly[j]&0xFF] + i];
+			}
 			lambdaLen++;
-			pLambda = pDest;
 		}
 
-		return Arrays.copyOfRange(MEM, pLambda, pLambda + lambdaLen);
+		return Arrays.copyOfRange(poly, 1, poly.length);
 	}
 	private static void polyMul(byte[] MEM, int p1, int p1Len, int p2, int p2Len, int pOut) {
 		Arrays.fill(MEM, pOut, pOut + p1Len + p2Len - 1, (byte) 0);
